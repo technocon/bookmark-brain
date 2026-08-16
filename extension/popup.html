@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">🧠</span>
+      <span class="brand-name">Bookmark Brain</span>
+    </div>
+    <button id="status-dot" class="status-dot" title="Checking connection…"></button>
+  </header>
+
+  <section id="save-card" class="save-card">
+    <img id="save-favicon" class="favicon" />
+    <div class="save-body">
+      <div id="save-title" class="save-title">—</div>
+      <div id="save-url" class="save-url">—</div>
+    </div>
+    <button id="save-btn" class="btn">Save</button>
+  </section>
+  <p id="save-status" class="save-status hidden"></p>
+
+  <div class="search-box">
+    <input id="search-input" type="text" placeholder="Search your bookmarks…" autocomplete="off" />
+  </div>
+  <ul id="results" class="result-list"></ul>
+  <p id="empty-state" class="empty-state">Type to search — or configure your server in Settings.</p>
+  <p id="offline-state" class="empty-state hidden">
+    Can't reach the Bookmark Brain server. <a id="open-settings-link" href="#">Check settings →</a>
+  </p>
+
+  <footer class="footer">
+    <a id="open-app-link" href="#" target="_blank">Open Bookmark Brain →</a>
+    <a id="settings-link" href="#">⚙ Settings</a>
+  </footer>
+
+  <script src="shared.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Bookmark Brain — Settings</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="topbar">
+      <span class="brand-mark">🧠</span>
+      <h1>Bookmark Brain</h1>
+    </header>
+
+    <section class="card">
+      <h2>Server</h2>
+      <p class="muted">Point this extension at your Bookmark Brain server — the self-hosted default, or a hosted instance later.</p>
+      <div class="row">
+        <input id="server-url" type="text" placeholder="http://localhost:3300" />
+        <button id="save-url-btn" class="btn">Save</button>
+      </div>
+      <p id="connection-status" class="status"></p>
+    </section>
+
+    <section class="card">
+      <h2>Import your Chrome bookmarks</h2>
+      <p class="muted">Reads your bookmarks directly from Chrome — no export/upload step. Existing bookmarks in Bookmark Brain won't be duplicated.</p>
+      <button id="import-btn" class="btn">Import all Chrome bookmarks</button>
+      <div id="import-progress" class="import-progress hidden">
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+        <p id="progress-stage" class="muted">Starting…</p>
+      </div>
+      <p id="import-result" class="status hidden"></p>
+    </section>
+
+    <p class="footer-link"><a id="open-app-link" href="#" target="_blank">Open Bookmark Brain →</a></p>
+  </div>
+
+  <script src="shared.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

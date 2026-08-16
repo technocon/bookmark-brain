@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "bookmark-brain",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start"],
+      "port": 3300,
+      "autoPort": true
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "name": "bookmark-brain",
+  "version": "0.1.0",
+  "description": "Semantic search and auto-clustering for your browser bookmarks.",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js",
+    "dev": "node --env-file-if-exists=.env --watch server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "express": "^4.19.2",
+    "multer": "^2.0.0"
+  }
+}
