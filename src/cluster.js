@@ -1,4 +1,14 @@
-const { bufferToVector, cosineSimilarity, tokenize, usingOpenAI } = require('./embeddings');
+const {
+  bufferToVector,
+  cosineSimilarity,
+  tokenize,
+  usingOpenAI,
+  usingGemini,
+  OPENAI_API_KEY,
+  OPENAI_CHAT_MODEL,
+  GEMINI_API_KEY,
+  GEMINI_CHAT_MODEL,
+} = require('./embeddings');
 
 function pickK(n) {
   if (n <= 6) return Math.max(1, Math.min(n, 2));
@@ -177,10 +187,52 @@ function labelClusters(bookmarks, assignments, k) {
   return labels;
 }
 
+const LABEL_SYSTEM_PROMPT =
+  'You label topic clusters of browser bookmarks. Given keywords and sample titles per cluster, return a JSON object {"labels": ["short 2-4 word label", ...]} in the same order as input, one label per cluster. Labels should be concise, specific, and human-friendly (e.g. "React & Frontend Tooling", "Sourdough Baking").';
+
+async function polishLabelsWithOpenAI(clustersForPrompt) {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: OPENAI_CHAT_MODEL,
+      temperature: 0.3,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: LABEL_SYSTEM_PROMPT },
+        { role: 'user', content: JSON.stringify(clustersForPrompt) },
+      ],
+    }),
+  });
+  if (!res.ok) return null;
+  const json = await res.json();
+  return JSON.parse(json.choices[0].message.content);
+}
+
+async function polishLabelsWithGemini(clustersForPrompt) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_CHAT_MODEL}:generateContent`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'x-goog-api-key': GEMINI_API_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      contents: [{ role: 'user', parts: [{ text: JSON.stringify(clustersForPrompt) }] }],
+      systemInstruction: { parts: [{ text: LABEL_SYSTEM_PROMPT }] },
+      generationConfig: { responseMimeType: 'application/json', temperature: 0.3 },
+    }),
+  });
+  if (!res.ok) return null;
+  const json = await res.json();
+  return JSON.parse(json.candidates[0].content.parts[0].text);
+}
+
 async function maybeImproveLabelsWithLLM(labels, clusterDocs) {
-  if (!usingOpenAI()) return labels;
-  const { OPENAI_API_KEY } = process.env;
-  const model = process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini';
+  if (!usingOpenAI() && !usingGemini()) return labels;
 
   try {
     const clustersForPrompt = labels.map((l, i) => ({
@@ -189,31 +241,11 @@ async function maybeImproveLabelsWithLLM(labels, clusterDocs) {
       sampleTitles: (clusterDocs[i] || []).slice(0, 6).map((b) => b.page_title || b.title),
     }));
 
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.3,
-        response_format: { type: 'json_object' },
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You label topic clusters of browser bookmarks. Given keywords and sample titles per cluster, return a JSON object {"labels": ["short 2-4 word label", ...]} in the same order as input, one label per cluster. Labels should be concise, specific, and human-friendly (e.g. "React & Frontend Tooling", "Sourdough Baking").',
-          },
-          { role: 'user', content: JSON.stringify(clustersForPrompt) },
-        ],
-      }),
-    });
+    const parsed = usingOpenAI()
+      ? await polishLabelsWithOpenAI(clustersForPrompt)
+      : await polishLabelsWithGemini(clustersForPrompt);
 
-    if (!res.ok) return labels;
-    const json = await res.json();
-    const parsed = JSON.parse(json.choices[0].message.content);
-    if (Array.isArray(parsed.labels) && parsed.labels.length === labels.length) {
+    if (parsed && Array.isArray(parsed.labels) && parsed.labels.length === labels.length) {
       return labels.map((l, i) => ({ ...l, label: parsed.labels[i] || l.label }));
     }
     return labels;

@@ -60,8 +60,8 @@
     const res = await fetch('/api/stats');
     const s = await res.json();
     document.getElementById('stat-total').textContent = `${s.indexed} bookmark${s.indexed === 1 ? '' : 's'}`;
-    document.getElementById('stat-mode').textContent =
-      s.embeddingMode === 'openai' ? 'OpenAI embeddings' : 'Local embeddings (offline)';
+    const modeLabels = { openai: 'OpenAI embeddings', gemini: 'Gemini embeddings', local: 'Local embeddings (offline)' };
+    document.getElementById('stat-mode').textContent = modeLabels[s.embeddingMode] || 'Local embeddings (offline)';
 
     const fallbackPill = document.getElementById('stat-fallback');
     if (s.fallback > 0) {

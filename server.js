@@ -5,7 +5,7 @@ const multer = require('multer');
 const db = require('./src/db');
 const { startImportJob, startImportJobFromList, startBackfillJob, saveOneBookmark, getJob } = require('./src/jobs');
 const { search } = require('./src/search');
-const { usingOpenAI } = require('./src/embeddings');
+const { activeProvider } = require('./src/embeddings');
 
 const app = express();
 const upload = multer({
@@ -43,7 +43,7 @@ app.get('/api/stats', (req, res) => {
     failed,
     indexed: fetched + fallback,
     clusters,
-    embeddingMode: usingOpenAI() ? 'openai' : 'local',
+    embeddingMode: activeProvider(),
   });
 });
 
@@ -209,7 +209,13 @@ app.delete('/api/bookmarks/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+const PROVIDER_LABELS = {
+  openai: `OpenAI (${process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small'})`,
+  gemini: `Gemini (${process.env.GEMINI_EMBEDDING_MODEL || 'gemini-embedding-001'})`,
+  local: 'local (offline, no API key)',
+};
+
 app.listen(PORT, () => {
   console.log(`Bookmark Brain running at http://localhost:${PORT}`);
-  console.log(`Embedding mode: ${usingOpenAI() ? 'OpenAI (' + (process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small') + ')' : 'local (offline, no API key)'}`);
+  console.log(`Embedding mode: ${PROVIDER_LABELS[activeProvider()]}`);
 });

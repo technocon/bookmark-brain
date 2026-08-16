@@ -26,9 +26,12 @@ Open **http://localhost:3300**.
 No API key is required — by default Bookmark Brain uses a built-in local
 embedding model (hashed bag-of-words), so import/search/clustering all work
 fully offline. For noticeably better semantic search, copy `.env.example` to
-`.env` and set `OPENAI_API_KEY`; embeddings (and cluster labels) then use
-OpenAI automatically, with a graceful fallback to local embeddings if a
-request ever fails.
+`.env` and set either `OPENAI_API_KEY` **or** `GEMINI_API_KEY` (whichever
+provider you have — if both are set, `EMBEDDING_PROVIDER` picks the
+winner); embeddings and cluster-label polishing then use that provider
+automatically, with a graceful fallback to local embeddings if a request
+ever fails. See the comments in `.env.example` for model overrides and how
+to add another provider later.
 
 ## Using it
 
@@ -64,10 +67,12 @@ request ever fails.
 - `src/importer.js` — parses Netscape-format bookmarks.html exports.
 - `src/fetcher.js` — concurrency-limited page fetch + text extraction (cheerio).
 - `src/embeddings.js` — pluggable embedder: local hashed bag-of-words by
-  default, OpenAI `text-embedding-3-small` when `OPENAI_API_KEY` is set.
-  Also builds the title+folder-only fallback text used when a fetch fails.
+  default, OpenAI or Gemini when the corresponding API key is set
+  (`EMBEDDING_PROVIDER` disambiguates if both are). Also builds the
+  title+folder-only fallback text used when a fetch fails, and documents
+  how to add another provider.
 - `src/cluster.js` — k-means over embeddings + TF-IDF-style cluster labeling
-  (optionally polished by an LLM call when an OpenAI key is present).
+  (optionally polished by an LLM call — OpenAI or Gemini, whichever's active).
 - `src/search.js` — cosine-similarity semantic search with a small keyword
   overlap boost; fallback (title-only) matches are penalized and tagged.
 - `src/jobs.js` — background import pipeline (parse → fetch → embed →
