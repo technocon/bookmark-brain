@@ -13,28 +13,50 @@
     <button id="status-dot" class="status-dot" title="Checking connection…"></button>
   </header>
 
-  <section id="save-card" class="save-card">
-    <img id="save-favicon" class="favicon" />
-    <div class="save-body">
-      <div id="save-title" class="save-title">—</div>
-      <div id="save-url" class="save-url">—</div>
-    </div>
-    <button id="save-btn" class="btn">Save</button>
+  <!-- Shown only when the configured server is multi-tenant (has /api/meta
+       with requiresAuth: true) and no valid session token is stored. A
+       self-hosted server never shows this — popup-main is used instead. -->
+  <section id="popup-auth" class="popup-auth hidden">
+    <h3 id="popup-auth-title">Sign in</h3>
+    <form id="popup-auth-form">
+      <input id="popup-auth-email" type="email" placeholder="you@example.com" autocomplete="email" required />
+      <input id="popup-auth-password" type="password" placeholder="Password" autocomplete="current-password" required />
+      <button type="submit" id="popup-auth-submit" class="btn btn-block">Sign in</button>
+    </form>
+    <p id="popup-auth-error" class="auth-error hidden"></p>
+    <p class="auth-switch">
+      <span id="popup-auth-switch-text">Don't have an account?</span>
+      <a id="popup-auth-switch-link" href="#">Create one</a>
+    </p>
   </section>
-  <p id="save-status" class="save-status hidden"></p>
 
-  <div class="search-box">
-    <input id="search-input" type="text" placeholder="Search your bookmarks…" autocomplete="off" />
+  <div id="popup-main">
+    <section id="save-card" class="save-card">
+      <img id="save-favicon" class="favicon" />
+      <div class="save-body">
+        <div id="save-title" class="save-title">—</div>
+        <div id="save-url" class="save-url">—</div>
+      </div>
+      <button id="save-btn" class="btn">Save</button>
+    </section>
+    <p id="save-status" class="save-status hidden"></p>
+
+    <div class="search-box">
+      <input id="search-input" type="text" placeholder="Search your bookmarks…" autocomplete="off" />
+    </div>
+    <ul id="results" class="result-list"></ul>
+    <p id="empty-state" class="empty-state">Type to search — or configure your server in Settings.</p>
+    <p id="offline-state" class="empty-state hidden">
+      Can't reach the Bookmark Brain server. <a id="open-settings-link" href="#">Check settings →</a>
+    </p>
   </div>
-  <ul id="results" class="result-list"></ul>
-  <p id="empty-state" class="empty-state">Type to search — or configure your server in Settings.</p>
-  <p id="offline-state" class="empty-state hidden">
-    Can't reach the Bookmark Brain server. <a id="open-settings-link" href="#">Check settings →</a>
-  </p>
 
   <footer class="footer">
     <a id="open-app-link" href="#" target="_blank">Open Bookmark Brain →</a>
-    <a id="settings-link" href="#">⚙ Settings</a>
+    <span>
+      <a id="popup-logout-link" href="#" class="hidden">Log out</a>
+      <a id="settings-link" href="#">⚙ Settings</a>
+    </span>
   </footer>
 
   <script src="shared.js"></script>

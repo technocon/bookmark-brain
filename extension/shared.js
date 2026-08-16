@@ -29,3 +29,49 @@ async function ensureHostPermission(serverUrl) {
   if (already) return true;
   return chrome.permissions.request({ origins: [pattern] });
 }
+
+// ---------- multi-tenant auth ----------
+// A self-hosted server has no /api/meta route at all and needs no auth.
+// A hosted multi-tenant server has one and requires a Bearer token.
+// Tokens are stored per-server so switching between a self-hosted and a
+// hosted instance (or between two hosted instances) doesn't mix sessions.
+
+async function getServerMeta(serverUrl) {
+  try {
+    const res = await fetch(`${serverUrl}/api/meta`);
+    if (!res.ok) return { mode: 'single', requiresAuth: false };
+    return await res.json();
+  } catch {
+    return { mode: 'unreachable', requiresAuth: false };
+  }
+}
+
+async function getAuthToken(serverUrl) {
+  const { authTokens } = await chrome.storage.local.get('authTokens');
+  return (authTokens || {})[serverUrl] || null;
+}
+
+async function setAuthToken(serverUrl, token) {
+  const { authTokens } = await chrome.storage.local.get('authTokens');
+  const next = { ...(authTokens || {}), [serverUrl]: token };
+  await chrome.storage.local.set({ authTokens: next });
+}
+
+async function clearAuthToken(serverUrl) {
+  const { authTokens } = await chrome.storage.local.get('authTokens');
+  const next = { ...(authTokens || {}) };
+  delete next[serverUrl];
+  await chrome.storage.local.set({ authTokens: next });
+}
+
+/**
+ * fetch() wrapper that adds the stored Bearer token for this server (if
+ * any) — a no-op for self-hosted servers, which never issue tokens in the
+ * first place since login/signup only exist on multi-tenant servers.
+ */
+async function authFetch(serverUrl, path, options = {}) {
+  const token = await getAuthToken(serverUrl);
+  const headers = new Headers(options.headers || {});
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  return fetch(`${serverUrl}${path}`, { ...options, headers });
+}

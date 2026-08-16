@@ -22,6 +22,37 @@
       <p id="connection-status" class="status"></p>
     </section>
 
+    <!-- Only shown for a multi-tenant server (self-hosted has no accounts
+         at all, and this whole card stays hidden). -->
+    <section id="account-card" class="card hidden">
+      <h2>Account</h2>
+
+      <div id="account-signed-out">
+        <p class="muted">This server requires an account to use.</p>
+        <div class="row">
+          <input id="account-email" type="email" placeholder="you@example.com" autocomplete="email" />
+        </div>
+        <div class="row" style="margin-top: 8px;">
+          <input id="account-password" type="password" placeholder="Password" autocomplete="current-password" />
+        </div>
+        <div class="account-auth-actions">
+          <button id="account-login-btn" class="btn">Sign in</button>
+          <button id="account-signup-btn" class="btn btn-ghost">Create account</button>
+        </div>
+        <p id="account-auth-status" class="status hidden"></p>
+      </div>
+
+      <div id="account-signed-in" class="hidden">
+        <p id="account-signed-in-email" class="muted"></p>
+        <p id="account-signed-in-status" class="muted"></p>
+        <div class="account-auth-actions">
+          <button id="account-manage-btn" class="btn btn-ghost hidden">Manage subscription</button>
+          <button id="account-subscribe-btn" class="btn hidden">Subscribe</button>
+          <button id="account-logout-btn" class="btn btn-ghost">Log out</button>
+        </div>
+      </div>
+    </section>
+
     <section class="card">
       <h2>Import your Chrome bookmarks</h2>
       <p class="muted">Reads your bookmarks directly from Chrome — no export/upload step. Existing bookmarks in Bookmark Brain won't be duplicated.</p>

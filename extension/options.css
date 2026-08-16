@@ -65,6 +65,14 @@ input[type="text"]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px va
 }
 .btn:hover:not(:disabled) { filter: brightness(1.08); }
 .btn:disabled { opacity: 0.6; cursor: default; }
+.btn-ghost {
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover:not(:disabled) { filter: none; color: var(--text); border-color: var(--accent); }
+
+.account-auth-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 
 .status { font-size: 12.5px; margin: 10px 0 0; color: var(--text-dim); }
 .status.ok { color: var(--accent-2); }

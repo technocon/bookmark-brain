@@ -9,27 +9,160 @@
   const importResult = document.getElementById('import-result');
   const openAppLink = document.getElementById('open-app-link');
 
+  const accountCard = document.getElementById('account-card');
+  const accountSignedOut = document.getElementById('account-signed-out');
+  const accountSignedIn = document.getElementById('account-signed-in');
+  const accountEmailInput = document.getElementById('account-email');
+  const accountPasswordInput = document.getElementById('account-password');
+  const accountLoginBtn = document.getElementById('account-login-btn');
+  const accountSignupBtn = document.getElementById('account-signup-btn');
+  const accountAuthStatus = document.getElementById('account-auth-status');
+  const accountSignedInEmail = document.getElementById('account-signed-in-email');
+  const accountSignedInStatus = document.getElementById('account-signed-in-status');
+  const accountManageBtn = document.getElementById('account-manage-btn');
+  const accountSubscribeBtn = document.getElementById('account-subscribe-btn');
+  const accountLogoutBtn = document.getElementById('account-logout-btn');
+
   let serverUrl = await getServerUrl();
   urlInput.value = serverUrl;
   openAppLink.href = serverUrl;
 
+  // ---------- connection + account status ----------
   async function checkConnection(url) {
     connectionStatus.className = 'status';
     connectionStatus.textContent = 'Checking…';
-    try {
-      const res = await fetch(`${url}/api/stats`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const stats = await res.json();
-      connectionStatus.className = 'status ok';
-      connectionStatus.textContent = `Connected — ${stats.indexed} bookmarks indexed, ${stats.clusters} clusters.`;
-      return true;
-    } catch (err) {
+
+    const meta = await getServerMeta(url);
+    if (meta.mode === 'unreachable') {
       connectionStatus.className = 'status error';
-      connectionStatus.textContent = `Can't reach ${url} — ${err.message}`;
+      connectionStatus.textContent = `Can't reach ${url}.`;
+      accountCard.classList.add('hidden');
       return false;
+    }
+
+    if (!meta.requiresAuth) {
+      // Self-hosted, single-tenant — no accounts at all, exactly the
+      // original behavior before multi-tenant support existed.
+      accountCard.classList.add('hidden');
+      try {
+        const res = await fetch(`${url}/api/stats`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const stats = await res.json();
+        connectionStatus.className = 'status ok';
+        connectionStatus.textContent = `Connected — ${stats.indexed} bookmarks indexed, ${stats.clusters} clusters.`;
+        return true;
+      } catch (err) {
+        connectionStatus.className = 'status error';
+        connectionStatus.textContent = `Can't reach ${url} — ${err.message}`;
+        return false;
+      }
+    }
+
+    // Multi-tenant server — show the account card and figure out whether
+    // we're already signed in.
+    accountCard.classList.remove('hidden');
+    connectionStatus.className = 'status ok';
+    connectionStatus.textContent = `Connected to ${url}.`;
+    await refreshAccountUI();
+    return true;
+  }
+
+  async function refreshAccountUI() {
+    const token = await getAuthToken(serverUrl);
+    if (!token) {
+      accountSignedOut.classList.remove('hidden');
+      accountSignedIn.classList.add('hidden');
+      return;
+    }
+
+    try {
+      const res = await authFetch(serverUrl, '/api/auth/me');
+      if (!res.ok) throw new Error('not signed in');
+      const { user } = await res.json();
+
+      accountSignedOut.classList.add('hidden');
+      accountSignedIn.classList.remove('hidden');
+      accountSignedInEmail.textContent = user.email;
+
+      if (user.subscriptionStatus === 'active') {
+        accountSignedInStatus.textContent = 'Subscription active.';
+        accountManageBtn.classList.remove('hidden');
+        accountSubscribeBtn.classList.add('hidden');
+      } else if (user.trialActive) {
+        const daysLeft = Math.max(0, Math.ceil((new Date(user.trialEndsAt) - Date.now()) / (24 * 60 * 60 * 1000)));
+        accountSignedInStatus.textContent = `Free trial — ${daysLeft} day${daysLeft === 1 ? '' : 's'} left.`;
+        accountManageBtn.classList.add('hidden');
+        accountSubscribeBtn.classList.remove('hidden');
+      } else {
+        accountSignedInStatus.textContent = 'Trial ended — subscribe to keep using Bookmark Brain.';
+        accountManageBtn.classList.add('hidden');
+        accountSubscribeBtn.classList.remove('hidden');
+      }
+
+      // Now that we're authenticated, the stats line can show real numbers.
+      const statsRes = await authFetch(serverUrl, '/api/stats');
+      if (statsRes.ok) {
+        const stats = await statsRes.json();
+        connectionStatus.textContent = `Connected — ${stats.indexed} bookmarks indexed, ${stats.clusters} clusters.`;
+      }
+    } catch {
+      await clearAuthToken(serverUrl);
+      accountSignedOut.classList.remove('hidden');
+      accountSignedIn.classList.add('hidden');
     }
   }
 
+  async function submitAuth(endpoint) {
+    accountAuthStatus.classList.add('hidden');
+    accountLoginBtn.disabled = true;
+    accountSignupBtn.disabled = true;
+    try {
+      const res = await fetch(`${serverUrl}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: accountEmailInput.value.trim(), password: accountPasswordInput.value }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+      await setAuthToken(serverUrl, data.token);
+      accountPasswordInput.value = '';
+      await refreshAccountUI();
+    } catch (err) {
+      accountAuthStatus.className = 'status error';
+      accountAuthStatus.textContent = err.message;
+      accountAuthStatus.classList.remove('hidden');
+    } finally {
+      accountLoginBtn.disabled = false;
+      accountSignupBtn.disabled = false;
+    }
+  }
+  accountLoginBtn.addEventListener('click', () => submitAuth('/api/auth/login'));
+  accountSignupBtn.addEventListener('click', () => submitAuth('/api/auth/signup'));
+
+  accountLogoutBtn.addEventListener('click', async () => {
+    try {
+      await authFetch(serverUrl, '/api/auth/logout', { method: 'POST' });
+    } catch {
+      // ignore — clearing local state regardless
+    }
+    await clearAuthToken(serverUrl);
+    await refreshAccountUI();
+  });
+
+  async function openBillingUrl(path) {
+    try {
+      const res = await authFetch(serverUrl, path, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Something went wrong.');
+      chrome.tabs.create({ url: data.url });
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+  accountSubscribeBtn.addEventListener('click', () => openBillingUrl('/api/billing/checkout'));
+  accountManageBtn.addEventListener('click', () => openBillingUrl('/api/billing/portal'));
+
+  // ---------- server URL ----------
   saveUrlBtn.addEventListener('click', async () => {
     const raw = urlInput.value.trim();
     if (!/^https?:\/\/.+/i.test(raw)) {
@@ -79,7 +212,7 @@
   function pollJob(jobId, { onTick, onDone, onError }) {
     const timer = setInterval(async () => {
       try {
-        const res = await fetch(`${serverUrl}/api/jobs/${jobId}`);
+        const res = await authFetch(serverUrl, `/api/jobs/${jobId}`);
         const job = await res.json();
         if (job.status === 'error') {
           clearInterval(timer);
@@ -118,13 +251,17 @@
     progressStage.textContent = `Sending ${bookmarks.length} bookmarks…`;
 
     try {
-      const res = await fetch(`${serverUrl}/api/import-json`, {
+      const res = await authFetch(serverUrl, '/api/import-json', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ bookmarks }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Import failed');
+      if (!res.ok) {
+        if (res.status === 401) throw new Error('Sign in above first.');
+        if (res.status === 402) throw new Error(data.error || 'Subscription required.');
+        throw new Error(data.error || 'Import failed');
+      }
 
       pollJob(data.jobId, {
         onTick: (job) => {

@@ -179,5 +179,28 @@ html, body {
   color: var(--text-dim);
   font-size: 11.5px;
   text-decoration: none;
+  margin-left: 12px;
 }
+.footer a:first-child { margin-left: 0; }
 .footer a:hover { color: var(--text); }
+.hidden { display: none !important; }
+
+/* ---------- multi-tenant sign-in (shown in place of popup-main) ---------- */
+.popup-auth { padding: 6px 14px 16px; }
+.popup-auth h3 { font-size: 14px; margin: 4px 0 12px; font-weight: 650; }
+#popup-auth-form { display: flex; flex-direction: column; gap: 8px; }
+#popup-auth-form input {
+  padding: 9px 11px;
+  font-size: 13px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  outline: none;
+  font-family: inherit;
+}
+#popup-auth-form input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
+.btn-block { width: 100%; }
+.auth-error { margin: 10px 0 0; font-size: 12px; color: var(--danger); }
+.auth-switch { margin: 12px 0 0; font-size: 12px; color: var(--text-dim); }
+.auth-switch a { color: var(--accent); text-decoration: none; margin-left: 4px; }
