@@ -257,27 +257,53 @@ async function maybeImproveLabelsWithLLM(labels, clusterDocs) {
 /**
  * Runs the full clustering pipeline over all fetched+embedded bookmarks.
  * Returns { assignments: bookmarkId -> clusterIndex, clusters: [{label, terms, size}] }
+ *
+ * Bookmarks embedded by different providers (local hashed vs. OpenAI vs.
+ * Gemini) aren't comparable — different dimensionality, different vector
+ * space entirely — so mixing them into one k-means run doesn't just give
+ * fuzzy results, it corrupts it: dist() has no length guard, a dimension
+ * mismatch produces NaN distances, and "NaN < bestDist" is always false in
+ * JS, so any bookmark whose distance-to-every-centroid comes out NaN never
+ * gets reassigned from its default index (0) — collapsing unrelated
+ * bookmarks from every group into one meaningless giant cluster. Grouping
+ * by dimensionality and clustering each group separately avoids the
+ * corruption and keeps clusters meaningful within whichever embedding
+ * space they actually share; once everything's re-embedded under one
+ * provider, this naturally collapses back to a single group.
  */
 async function clusterBookmarks(bookmarks) {
   const withVectors = bookmarks.filter((b) => b.embedding);
   if (withVectors.length === 0) return { assignments: {}, clusters: [] };
 
-  const vectors = withVectors.map((b) => bufferToVector(b.embedding));
-  const k = pickK(withVectors.length);
-  const { assignments } = kmeans(vectors, k);
-
-  let labels = labelClusters(withVectors, assignments, k);
-
-  const clusterDocs = Array.from({ length: k }, () => []);
-  assignments.forEach((c, i) => clusterDocs[c].push(withVectors[i]));
-  labels = await maybeImproveLabelsWithLLM(labels, clusterDocs);
+  const groups = new Map(); // vector length -> bookmarks[]
+  for (const b of withVectors) {
+    const dims = bufferToVector(b.embedding).length;
+    if (!groups.has(dims)) groups.set(dims, []);
+    groups.get(dims).push(b);
+  }
 
   const assignmentById = {};
-  withVectors.forEach((b, i) => {
-    assignmentById[b.id] = assignments[i];
-  });
+  const allClusters = [];
 
-  return { assignments: assignmentById, clusters: labels };
+  for (const groupBookmarks of groups.values()) {
+    const vectors = groupBookmarks.map((b) => bufferToVector(b.embedding));
+    const k = pickK(groupBookmarks.length);
+    const { assignments } = kmeans(vectors, k);
+
+    let labels = labelClusters(groupBookmarks, assignments, k);
+
+    const clusterDocs = Array.from({ length: k }, () => []);
+    assignments.forEach((c, i) => clusterDocs[c].push(groupBookmarks[i]));
+    labels = await maybeImproveLabelsWithLLM(labels, clusterDocs);
+
+    const indexOffset = allClusters.length;
+    groupBookmarks.forEach((b, i) => {
+      assignmentById[b.id] = indexOffset + assignments[i];
+    });
+    allClusters.push(...labels);
+  }
+
+  return { assignments: assignmentById, clusters: allClusters };
 }
 
 module.exports = { clusterBookmarks, pickK, cosineSimilarity };
