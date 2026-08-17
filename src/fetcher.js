@@ -6,6 +6,19 @@ const USER_AGENT =
   'Mozilla/5.0 (compatible; BookmarkBrain/0.1; +https://bookmarkbrain.app)';
 
 /**
+ * True if two hostnames belong to the same site — equal, or one is a
+ * subdomain of the other (bookmarkbrain.app vs www.bookmarkbrain.app vs
+ * blog.bookmarkbrain.app all count). Deliberately not a full public-suffix
+ * comparison; the point is just to distinguish "the site moved/normalized
+ * its URL" from "this domain expired and now belongs to someone else."
+ */
+function sameSite(hostA, hostB) {
+  const a = hostA.replace(/^www\./, '');
+  const b = hostB.replace(/^www\./, '');
+  return a === b || a.endsWith(`.${b}`) || b.endsWith(`.${a}`);
+}
+
+/**
  * Fetches a bookmark's URL and extracts a compact text representation
  * (title, meta description, and a chunk of visible body text) suitable
  * for embedding. Never throws — returns { ok:false, error } on failure
@@ -27,6 +40,26 @@ async function fetchPageContent(url) {
 
     if (!res.ok) {
       return { ok: false, error: `HTTP ${res.status}` };
+    }
+
+    // A redirect landing on a different site than the one bookmarked means
+    // the original domain likely expired and now belongs to someone else
+    // (parking pages, resold domains hijacking old URLs to point wherever
+    // the new owner wants — including, in one observed real case, an old
+    // CBS Interactive "site.com.com" shortener domain now 301-ing to an
+    // unrelated Wikipedia article). Trusting that content would silently
+    // embed/cluster the bookmark under whatever the hijacked domain now
+    // serves. Safer to treat it as failed — same as any other dead link —
+    // which already falls back to title-only embedding.
+    try {
+      const originalHost = new URL(url).hostname;
+      const finalHost = new URL(res.url).hostname;
+      if (!sameSite(originalHost, finalHost)) {
+        return { ok: false, error: `Redirected to a different site (${finalHost}) — likely an expired/resold domain` };
+      }
+    } catch {
+      // If either URL fails to parse, fall through and let the rest of
+      // the function's own error handling deal with it.
     }
 
     const contentType = res.headers.get('content-type') || '';
