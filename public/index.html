@@ -80,6 +80,21 @@
           </div>
         </div>
       </div>
+
+      <div class="import-card hidden" id="reembed-card">
+        <h2>Upgrade existing bookmarks</h2>
+        <p class="muted">
+          Bookmarks saved before <strong id="reembed-provider-name">this provider</strong> was configured are
+          still on their original embeddings. Re-embed them all for consistent, higher-quality search — this
+          re-uses the page content already saved, no re-fetching, but it does make one API call per bookmark.
+        </p>
+        <button id="reembed-btn" class="btn">Re-embed all bookmarks</button>
+        <div id="reembed-progress" class="import-progress hidden">
+          <div class="progress-bar"><div class="progress-fill" id="reembed-progress-fill"></div></div>
+          <p id="reembed-progress-stage" class="progress-stage">Starting…</p>
+        </div>
+        <p id="reembed-result" class="reembed-result hidden"></p>
+      </div>
     </section>
   </main>
 

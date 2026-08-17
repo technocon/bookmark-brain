@@ -78,6 +78,14 @@
     } else {
       failedPill.classList.add('hidden');
     }
+
+    const reembedCard = document.getElementById('reembed-card');
+    if (s.embeddingMode !== 'local' && s.indexed > 0) {
+      document.getElementById('reembed-provider-name').textContent = modeLabels[s.embeddingMode];
+      reembedCard.classList.remove('hidden');
+    } else {
+      reembedCard.classList.add('hidden');
+    }
   }
   document.getElementById('stat-fallback').addEventListener('click', openFallbackDrawer);
   document.getElementById('stat-failed').addEventListener('click', openFailedDrawer);
@@ -393,6 +401,62 @@
   }
 
   document.getElementById('view-clusters-btn').addEventListener('click', () => showTab('clusters'));
+
+  // ---------- re-embed existing bookmarks with the active provider ----------
+  const reembedBtn = document.getElementById('reembed-btn');
+  const reembedProgress = document.getElementById('reembed-progress');
+  const reembedProgressFill = document.getElementById('reembed-progress-fill');
+  const reembedProgressStage = document.getElementById('reembed-progress-stage');
+  const reembedResult = document.getElementById('reembed-result');
+
+  reembedBtn.addEventListener('click', async () => {
+    if (!confirm('Re-embed every bookmark with the active provider? This makes one API call per bookmark.')) return;
+
+    reembedResult.classList.add('hidden');
+    reembedBtn.disabled = true;
+    reembedProgress.classList.remove('hidden');
+    reembedProgressFill.style.width = '4%';
+    reembedProgressStage.textContent = 'Starting…';
+
+    try {
+      const res = await fetch('/api/reembed', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Re-embed failed');
+
+      pollJob(data.jobId, {
+        onTick: (job) => {
+          const pct = job.total
+            ? Math.min(99, Math.round(((job.done || 0) + (job.partial || 0)) / job.total * 100))
+            : 8;
+          reembedProgressFill.style.width = `${job.status === 'done' ? 100 : pct}%`;
+          reembedProgressStage.textContent = job.stage || 'Working…';
+        },
+        onDone: (job) => {
+          reembedProgress.classList.add('hidden');
+          reembedBtn.disabled = false;
+          const bits = [`${job.done} re-embedded`];
+          if (job.partial) bits.push(`${job.partial} fell back to local (provider hiccup)`);
+          reembedResult.textContent = `Done — ${bits.join(', ')}.`;
+          reembedResult.classList.remove('error');
+          reembedResult.classList.remove('hidden');
+          loadStats();
+        },
+        onError: (msg) => {
+          reembedProgress.classList.add('hidden');
+          reembedBtn.disabled = false;
+          reembedResult.textContent = msg;
+          reembedResult.classList.add('error');
+          reembedResult.classList.remove('hidden');
+        },
+      });
+    } catch (err) {
+      reembedProgress.classList.add('hidden');
+      reembedBtn.disabled = false;
+      reembedResult.textContent = err.message;
+      reembedResult.classList.add('error');
+      reembedResult.classList.remove('hidden');
+    }
+  });
 
   // ---------- utils ----------
   function escapeHtml(str) {

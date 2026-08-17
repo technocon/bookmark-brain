@@ -3,7 +3,7 @@ const express = require('express');
 const multer = require('multer');
 
 const db = require('./src/db');
-const { startImportJob, startImportJobFromList, startBackfillJob, saveOneBookmark, getJob } = require('./src/jobs');
+const { startImportJob, startImportJobFromList, startBackfillJob, startReembedJob, saveOneBookmark, getJob } = require('./src/jobs');
 const { search } = require('./src/search');
 const { activeProvider } = require('./src/embeddings');
 
@@ -188,6 +188,14 @@ app.get('/api/bookmarks/fallback', (req, res) => {
 
 app.post('/api/backfill', (req, res) => {
   const jobId = startBackfillJob();
+  res.json({ jobId });
+});
+
+app.post('/api/reembed', (req, res) => {
+  if (activeProvider() === 'local') {
+    return res.status(400).json({ error: 'No embedding provider is configured — nothing to upgrade to.' });
+  }
+  const jobId = startReembedJob();
   res.json({ jobId });
 });
 

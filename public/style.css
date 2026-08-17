@@ -343,6 +343,9 @@ main {
   font-size: 13.5px;
 }
 
+.reembed-result { margin-top: 14px; font-size: 13.5px; color: var(--accent-2); }
+.reembed-result.error { color: var(--danger); }
+
 .import-done { margin-top: 18px; font-size: 14px; }
 .import-done-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .btn {

@@ -9,6 +9,7 @@ const {
   vectorToBuffer,
   bufferToVector,
   cosineSimilarity,
+  activeProvider,
 } = require('./embeddings');
 const { clusterBookmarks } = require('./cluster');
 
@@ -41,6 +42,7 @@ const markFailedStmt = db.prepare(`
 `);
 
 const setClusterStmt = db.prepare(`UPDATE bookmarks SET cluster_id = ? WHERE id = ?`);
+const setEmbeddingStmt = db.prepare(`UPDATE bookmarks SET embedding = ? WHERE id = ?`);
 const clearClustersStmt = db.prepare(`DELETE FROM clusters`);
 const insertClusterStmt = db.prepare(
   `INSERT INTO clusters (run_id, label, terms, size) VALUES (?, ?, ?, ?)`
@@ -297,6 +299,71 @@ async function runBackfillPipeline(jobId) {
 }
 
 /**
+ * Re-embeds every already-fetched/fallback bookmark with whichever
+ * provider is currently active, reusing the content already stored from
+ * the original fetch — no re-crawling the web, just re-running embed()
+ * over text that's already sitting in the database. For when a
+ * collection was originally embedded locally (or under a different
+ * provider) and you want it consistently upgraded, e.g. after adding an
+ * API key. Ends with a full recluster so everything lands in one
+ * dimensionality group again instead of staying split (see cluster.js).
+ */
+function startReembedJob() {
+  const jobId = createJobRow('reembed');
+  runReembedPipeline(jobId).catch((err) => {
+    updateJob(jobId, { status: 'error', error: err.message });
+  });
+  return jobId;
+}
+
+async function runReembedPipeline(jobId) {
+  const targets = db.prepare(`SELECT * FROM bookmarks WHERE status IN ('fetched', 'fallback')`).all();
+
+  updateJob(jobId, {
+    stage: `re-embedding with ${activeProvider()}`,
+    total: targets.length,
+    done: 0,
+    partial: 0,
+    failed: 0,
+  });
+
+  if (targets.length === 0) {
+    updateJob(jobId, { status: 'done', stage: 'done' });
+    return;
+  }
+
+  let done = 0;
+  let partial = 0;
+
+  await mapWithConcurrency(
+    targets,
+    FETCH_CONCURRENCY,
+    async (bookmark) => {
+      const text =
+        bookmark.status === 'fallback'
+          ? buildFallbackEmbeddingText({ title: bookmark.title, folder: bookmark.folder })
+          : buildEmbeddingText({
+              title: bookmark.title,
+              pageTitle: bookmark.page_title,
+              description: bookmark.page_description,
+              text: bookmark.page_text,
+            });
+      const { vector, source } = await embed(text);
+      setEmbeddingStmt.run(vectorToBuffer(vector), bookmark.id);
+      if (source === activeProvider()) done++;
+      else partial++; // embed() fell back to local (transient provider error)
+    },
+    (completed, total) => {
+      updateJob(jobId, { done, partial, stage: `re-embedding (${completed}/${total})` });
+    }
+  );
+
+  await reclusterAll(jobId);
+
+  updateJob(jobId, { status: 'done', stage: 'done', done, partial, total: targets.length });
+}
+
+/**
  * Places a freshly-embedded bookmark into whichever existing cluster it's
  * closest to, without re-running k-means over the whole collection — a
  * full recluster is fine for a batch import but would make every single
@@ -373,6 +440,7 @@ module.exports = {
   startImportJob,
   startImportJobFromList,
   startBackfillJob,
+  startReembedJob,
   saveOneBookmark,
   getJob,
 };
