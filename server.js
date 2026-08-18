@@ -199,6 +199,24 @@ app.post('/api/reembed', (req, res) => {
   res.json({ jobId });
 });
 
+// Shared by single and bulk delete: decrements each affected cluster's
+// size by however many of its members were just removed, then drops any
+// cluster whose size lands at 0 — an empty cluster is dead weight, a
+// clickable card in the UI that leads nowhere.
+const shrinkClusterStmt = db.prepare(`UPDATE clusters SET size = size - ? WHERE id = ?`);
+const deleteEmptyClusterStmt = db.prepare(`DELETE FROM clusters WHERE id = ? AND size <= 0`);
+function shrinkOrRemoveClusters(clusterIds) {
+  const counts = new Map();
+  for (const id of clusterIds) {
+    if (id == null) continue;
+    counts.set(id, (counts.get(id) || 0) + 1);
+  }
+  for (const [clusterId, count] of counts) {
+    shrinkClusterStmt.run(count, clusterId);
+    deleteEmptyClusterStmt.run(clusterId);
+  }
+}
+
 app.delete('/api/bookmarks/:id', (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id' });
@@ -206,15 +224,30 @@ app.delete('/api/bookmarks/:id', (req, res) => {
   const bookmark = db.prepare(`SELECT cluster_id FROM bookmarks WHERE id = ?`).get(id);
   if (!bookmark) return res.status(404).json({ error: 'Bookmark not found' });
 
-  const deleteAndShrinkCluster = db.transaction((bookmarkId, clusterId) => {
-    db.prepare(`DELETE FROM bookmarks WHERE id = ?`).run(bookmarkId);
-    if (clusterId != null) {
-      db.prepare(`UPDATE clusters SET size = size - 1 WHERE id = ?`).run(clusterId);
-    }
+  const deleteOne = db.transaction(() => {
+    db.prepare(`DELETE FROM bookmarks WHERE id = ?`).run(id);
+    shrinkOrRemoveClusters([bookmark.cluster_id]);
   });
-  deleteAndShrinkCluster(id, bookmark.cluster_id);
+  deleteOne();
 
   res.json({ ok: true });
+});
+
+app.post('/api/bookmarks/bulk-delete', (req, res) => {
+  const ids = Array.isArray(req.body?.ids) ? req.body.ids.map(Number).filter(Number.isInteger) : [];
+  if (ids.length === 0) return res.status(400).json({ error: 'No ids provided' });
+
+  const placeholders = ids.map(() => '?').join(',');
+  const rows = db.prepare(`SELECT id, cluster_id FROM bookmarks WHERE id IN (${placeholders})`).all(...ids);
+  if (rows.length === 0) return res.status(404).json({ error: 'No matching bookmarks found' });
+
+  const deleteMany = db.transaction(() => {
+    db.prepare(`DELETE FROM bookmarks WHERE id IN (${placeholders})`).run(...ids);
+    shrinkOrRemoveClusters(rows.map((r) => r.cluster_id));
+  });
+  deleteMany();
+
+  res.json({ ok: true, deleted: rows.length });
 });
 
 const PROVIDER_LABELS = {

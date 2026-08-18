@@ -28,6 +28,10 @@
     return `<button class="delete-btn" data-delete-id="${id}" data-delete-title="${escapeAttr(title)}" title="Delete bookmark" aria-label="Delete bookmark">🗑</button>`;
   }
 
+  function selectCheckboxHtml(id) {
+    return `<input type="checkbox" class="select-checkbox" data-select-id="${id}" aria-label="Select bookmark" />`;
+  }
+
   // Event delegation so a single listener survives re-renders (innerHTML
   // swaps on the container don't remove a listener bound to the container
   // itself) instead of re-binding per item on every render.
@@ -47,12 +51,78 @@
         const res = await fetch(`/api/bookmarks/${id}`, { method: 'DELETE' });
         if (!res.ok) throw new Error('Delete failed');
         btn.closest('li')?.remove();
+        refreshSelectionBarFor(container);
         loadStats();
       } catch {
         btn.disabled = false;
         alert("Couldn't delete that bookmark — try again.");
       }
     });
+  }
+
+  // ---------- multi-select bulk delete ----------
+  // One selection bar serves the search results list, and one serves the
+  // drawer (reused across cluster/failed/fallback views) — both driven by
+  // the same logic, keyed off whichever container currently holds the
+  // checkboxes. `refetch` re-runs whatever populated that container, so a
+  // bulk delete leaves the view in a correct, freshly-rendered state
+  // (right empty-state message, right counts) instead of hand-editing DOM.
+  const selectionBars = new Map(); // container element -> { refresh }
+  // Whichever open*Drawer function last populated the drawer — the shared
+  // drawer selection bar calls this after a bulk delete to reload whatever
+  // view is actually open (cluster bookmarks, failed imports, or fallback
+  // matches), rather than needing to know which one it is.
+  let currentDrawerRefetch = null;
+
+  function setupSelectionBar({ container, bar, selectAllCheckbox, countEl, deleteBtn, refetch }) {
+    function refresh() {
+      const checkboxes = [...container.querySelectorAll('.select-checkbox')];
+      const checked = checkboxes.filter((cb) => cb.checked);
+      bar.classList.toggle('hidden', checkboxes.length === 0);
+      countEl.textContent = checked.length > 0 ? `${checked.length} selected` : '';
+      deleteBtn.disabled = checked.length === 0;
+      selectAllCheckbox.checked = checkboxes.length > 0 && checked.length === checkboxes.length;
+      selectAllCheckbox.indeterminate = checked.length > 0 && checked.length < checkboxes.length;
+    }
+
+    container.addEventListener('change', (e) => {
+      if (e.target.classList.contains('select-checkbox')) refresh();
+    });
+
+    selectAllCheckbox.addEventListener('change', () => {
+      container.querySelectorAll('.select-checkbox').forEach((cb) => {
+        cb.checked = selectAllCheckbox.checked;
+      });
+      refresh();
+    });
+
+    deleteBtn.addEventListener('click', async () => {
+      const ids = [...container.querySelectorAll('.select-checkbox:checked')].map((cb) => cb.dataset.selectId);
+      if (ids.length === 0) return;
+      if (!confirm(`Delete ${ids.length} bookmark${ids.length === 1 ? '' : 's'}? This can't be undone.`)) return;
+
+      deleteBtn.disabled = true;
+      try {
+        const res = await fetch('/api/bookmarks/bulk-delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids }),
+        });
+        if (!res.ok) throw new Error('Delete failed');
+        await refetch();
+        loadStats();
+      } catch {
+        deleteBtn.disabled = false;
+        alert("Couldn't delete the selected bookmarks — try again.");
+      }
+    });
+
+    selectionBars.set(container, { refresh });
+    return { refresh };
+  }
+
+  function refreshSelectionBarFor(container) {
+    selectionBars.get(container)?.refresh();
   }
 
   // ---------- stats ----------
@@ -103,6 +173,7 @@
     drawerList.innerHTML = '';
     clearDrawerActions();
     overlay.classList.remove('hidden');
+    currentDrawerRefetch = openFailedDrawer;
     const res = await fetch('/api/bookmarks/failed');
     const { bookmarks } = await res.json();
     renderFailedList(bookmarks);
@@ -122,12 +193,14 @@
 
     if (!items.length) {
       drawerList.innerHTML = `<li class="empty-state"><p class="muted">Nothing failed — every bookmark is searchable.</p></li>`;
+      refreshSelectionBarFor(drawerList);
       return;
     }
     drawerList.innerHTML = items
       .map(
         (b) => `
         <li>
+          ${selectCheckboxHtml(b.id)}
           <a class="result-item" href="${escapeAttr(b.url)}" target="_blank" rel="noopener noreferrer">
             <img class="favicon" src="${escapeAttr(faviconUrl(null, b.url))}" onerror="this.style.visibility='hidden'" />
             <div class="result-body">
@@ -140,6 +213,7 @@
         </li>`
       )
       .join('');
+    refreshSelectionBarFor(drawerList);
   }
 
   function runBackfill() {
@@ -184,6 +258,7 @@
     document.getElementById('drawer-actions').innerHTML =
       `<p class="drawer-note">These pages couldn't be fetched (blocked, dead, or behind a login), so they're searchable by title and folder only — not full content.</p>`;
     overlay.classList.remove('hidden');
+    currentDrawerRefetch = openFallbackDrawer;
     const res = await fetch('/api/bookmarks/fallback');
     const { bookmarks } = await res.json();
     renderResults(
@@ -198,6 +273,14 @@
   const searchEmpty = document.getElementById('search-empty');
   let searchTimer = null;
   enableDeleteHandling(searchResults);
+  setupSelectionBar({
+    container: searchResults,
+    bar: document.getElementById('search-select-bar'),
+    selectAllCheckbox: document.getElementById('search-select-all'),
+    countEl: document.getElementById('search-select-count'),
+    deleteBtn: document.getElementById('search-delete-selected'),
+    refetch: () => runSearch(searchInput.value.trim()),
+  });
 
   searchInput.addEventListener('input', () => {
     clearTimeout(searchTimer);
@@ -205,6 +288,7 @@
     if (!q) {
       searchResults.innerHTML = '';
       searchEmpty.style.display = '';
+      refreshSelectionBarFor(searchResults);
       return;
     }
     searchTimer = setTimeout(() => runSearch(q), 220);
@@ -220,6 +304,7 @@
   function renderResults(container, items) {
     if (!items.length) {
       container.innerHTML = `<li class="empty-state"><p class="muted">No matches yet — try a different phrase.</p></li>`;
+      refreshSelectionBarFor(container);
       return;
     }
     container.innerHTML = items
@@ -231,6 +316,7 @@
           : '';
         return `
         <li>
+          ${selectCheckboxHtml(r.id)}
           <a class="result-item" href="${escapeAttr(r.url)}" target="_blank" rel="noopener noreferrer">
             <img class="favicon" src="${escapeAttr(faviconUrl(r.favicon, r.url))}" onerror="this.style.visibility='hidden'" />
             <div class="result-body">
@@ -247,6 +333,7 @@
         </li>`;
       })
       .join('');
+    refreshSelectionBarFor(container);
   }
 
   // ---------- clusters ----------
@@ -286,12 +373,21 @@
   const drawerTitle = document.getElementById('drawer-title');
   const drawerList = document.getElementById('drawer-list');
   enableDeleteHandling(drawerList);
+  setupSelectionBar({
+    container: drawerList,
+    bar: document.getElementById('drawer-select-bar'),
+    selectAllCheckbox: document.getElementById('drawer-select-all'),
+    countEl: document.getElementById('drawer-select-count'),
+    deleteBtn: document.getElementById('drawer-delete-selected'),
+    refetch: () => currentDrawerRefetch && currentDrawerRefetch(),
+  });
 
   async function openClusterDrawer(id, label) {
     drawerTitle.textContent = label;
     drawerList.innerHTML = '';
     clearDrawerActions();
     overlay.classList.remove('hidden');
+    currentDrawerRefetch = () => openClusterDrawer(id, label);
     const res = await fetch(`/api/clusters/${id}/bookmarks`);
     const { bookmarks } = await res.json();
     renderResults(drawerList, bookmarks);

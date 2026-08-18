@@ -39,6 +39,11 @@
         <p>Search by meaning, not by memory.</p>
         <p class="muted">Describe the gist of a bookmark and Bookmark Brain will find it — even if you don't remember the title, the site, or which folder you filed it in.</p>
       </div>
+      <div id="search-select-bar" class="select-bar hidden">
+        <label class="select-all-label"><input type="checkbox" id="search-select-all" /> Select all</label>
+        <span id="search-select-count" class="select-count"></span>
+        <button id="search-delete-selected" class="btn btn-ghost" disabled>Delete selected</button>
+      </div>
       <ul id="search-results" class="result-list"></ul>
     </section>
 
@@ -103,6 +108,11 @@
       <div class="drawer-header">
         <h3 id="drawer-title"></h3>
         <button id="drawer-close" class="icon-btn">✕</button>
+      </div>
+      <div id="drawer-select-bar" class="select-bar hidden">
+        <label class="select-all-label"><input type="checkbox" id="drawer-select-all" /> Select all</label>
+        <span id="drawer-select-count" class="select-count"></span>
+        <button id="drawer-delete-selected" class="btn btn-ghost" disabled>Delete selected</button>
       </div>
       <div id="drawer-actions" class="drawer-actions hidden"></div>
       <ul id="drawer-list" class="result-list"></ul>

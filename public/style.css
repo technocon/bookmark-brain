@@ -246,6 +246,40 @@ main {
 .drawer-actions.hidden { display: none; }
 .drawer-note { font-size: 12.5px; color: var(--text-faint); margin: 6px 0 0; }
 
+.select-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0 6px;
+  padding: 8px 12px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 13px;
+}
+.select-bar.hidden { display: none; }
+.select-all-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+}
+.select-all-label input { accent-color: var(--accent); cursor: pointer; }
+.select-count { color: var(--text-faint); flex: 1; }
+#search-select-bar .btn, #drawer-select-bar .btn { margin-top: 0; padding: 6px 12px; font-size: 12.5px; }
+
+.select-checkbox {
+  flex-shrink: 0;
+  align-self: center;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
 .cluster-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));

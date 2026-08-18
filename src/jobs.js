@@ -154,10 +154,16 @@ async function reclusterAll(jobId) {
   const runId = crypto.randomUUID();
   const assignClusters = db.transaction(() => {
     clearClustersStmt.run();
+    // idMap stays sparse (indexed by position, not push order) — an empty
+    // cluster (a known k-means edge case) never appears in `assignments`
+    // since no bookmark can be assigned to a cluster with no members, so
+    // skipping its insert here just leaves that slot unused rather than
+    // persisting a size-0 cluster that'd show up as a dead, empty card.
     const idMap = [];
-    clusters.forEach((c) => {
+    clusters.forEach((c, index) => {
+      if (c.size <= 0) return;
       const info = insertClusterStmt.run(runId, c.label, JSON.stringify(c.terms), c.size);
-      idMap.push(Number(info.lastInsertRowid));
+      idMap[index] = Number(info.lastInsertRowid);
     });
     for (const [bookmarkId, clusterIndex] of Object.entries(assignments)) {
       setClusterStmt.run(idMap[clusterIndex], Number(bookmarkId));
