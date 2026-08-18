@@ -204,3 +204,31 @@ html, body {
 .auth-error { margin: 10px 0 0; font-size: 12px; color: var(--danger); }
 .auth-switch { margin: 12px 0 0; font-size: 12px; color: var(--text-dim); }
 .auth-switch a { color: var(--accent); text-decoration: none; margin-left: 4px; }
+
+.btn-google {
+  background: var(--bg-elev-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.btn-google:hover:not(:disabled) { filter: none; border-color: var(--accent); }
+.google-g { width: 14px; height: 14px; flex: none; }
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.auth-divider::before, .auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}

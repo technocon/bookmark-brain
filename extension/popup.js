@@ -87,6 +87,24 @@
     setAuthMode(authMode === 'login' ? 'signup' : 'login');
   });
 
+  const googleBtn = document.getElementById('popup-google-btn');
+  const googleDivider = document.getElementById('popup-auth-divider');
+  googleBtn.addEventListener('click', async () => {
+    authError.classList.add('hidden');
+    googleBtn.disabled = true;
+    try {
+      await signInWithGoogle(serverUrl);
+      showMain();
+      logoutLink.classList.remove('hidden');
+      await init();
+    } catch (err) {
+      authError.textContent = err.message;
+      authError.classList.remove('hidden');
+    } finally {
+      googleBtn.disabled = false;
+    }
+  });
+
   authForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     authError.classList.add('hidden');
@@ -256,6 +274,10 @@
 
   const meta = await getServerMeta(serverUrl);
   if (meta.requiresAuth) {
+    if (meta.googleAuthConfigured) {
+      googleBtn.classList.remove('hidden');
+      googleDivider.classList.remove('hidden');
+    }
     const token = await getAuthToken(serverUrl);
     if (!token) {
       setAuthMode('login');

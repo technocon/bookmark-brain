@@ -75,3 +75,50 @@ async function authFetch(serverUrl, path, options = {}) {
   if (token) headers.set('Authorization', `Bearer ${token}`);
   return fetch(`${serverUrl}${path}`, { ...options, headers });
 }
+
+// chrome.identity.getAuthToken() is callback-based on every Chrome version
+// (a Promise-returning overload only landed recently), so it's wrapped here
+// rather than called directly from popup.js/options.js.
+function chromeGetAuthToken(details) {
+  return new Promise((resolve, reject) => {
+    chrome.identity.getAuthToken(details, (token) => {
+      if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+      else resolve(token);
+    });
+  });
+}
+
+/**
+ * Full Google sign-in: gets an access token from the account the browser
+ * profile is signed into (prompting for consent/account choice the first
+ * time, via manifest.json's oauth2.client_id), sends it to the server for
+ * verification, and stores the resulting Bookmark Brain session token —
+ * same shape/storage as email+password login. Requires manifest.json's
+ * oauth2.client_id to be a real Chrome Extension OAuth client (the default
+ * placeholder there will make this throw a clear Chrome-side error).
+ */
+async function signInWithGoogle(serverUrl) {
+  let accessToken;
+  try {
+    accessToken = await chromeGetAuthToken({ interactive: true });
+  } catch (err) {
+    throw new Error(`Google sign-in failed: ${err.message}`);
+  }
+  if (!accessToken) throw new Error('Google sign-in was canceled.');
+
+  const res = await fetch(`${serverUrl}/api/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ accessToken }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    // Drop the cached token so a retry (e.g. after the user fixes server
+    // config) fetches a fresh one instead of repeating the same failure.
+    chrome.identity.removeCachedAuthToken({ token: accessToken }, () => {});
+    throw new Error(data.error || 'Google sign-in failed.');
+  }
+
+  await setAuthToken(serverUrl, data.token);
+  return data;
+}

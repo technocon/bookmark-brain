@@ -74,6 +74,35 @@ input[type="text"]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px va
 
 .account-auth-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 
+.btn-google {
+  background: var(--bg-elev-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.btn-google:hover:not(:disabled) { filter: none; border-color: var(--accent); }
+.google-g { width: 15px; height: 15px; flex: none; }
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.auth-divider::before, .auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
 .status { font-size: 12.5px; margin: 10px 0 0; color: var(--text-dim); }
 .status.ok { color: var(--accent-2); }
 .status.error { color: var(--danger); }

@@ -16,6 +16,8 @@
   const accountPasswordInput = document.getElementById('account-password');
   const accountLoginBtn = document.getElementById('account-login-btn');
   const accountSignupBtn = document.getElementById('account-signup-btn');
+  const accountGoogleBtn = document.getElementById('account-google-btn');
+  const accountAuthDivider = document.getElementById('account-auth-divider');
   const accountAuthStatus = document.getElementById('account-auth-status');
   const accountSignedInEmail = document.getElementById('account-signed-in-email');
   const accountSignedInStatus = document.getElementById('account-signed-in-status');
@@ -61,6 +63,8 @@
     // Multi-tenant server — show the account card and figure out whether
     // we're already signed in.
     accountCard.classList.remove('hidden');
+    accountGoogleBtn.classList.toggle('hidden', !meta.googleAuthConfigured);
+    accountAuthDivider.classList.toggle('hidden', !meta.googleAuthConfigured);
     connectionStatus.className = 'status ok';
     connectionStatus.textContent = `Connected to ${url}.`;
     await refreshAccountUI();
@@ -138,6 +142,21 @@
   }
   accountLoginBtn.addEventListener('click', () => submitAuth('/api/auth/login'));
   accountSignupBtn.addEventListener('click', () => submitAuth('/api/auth/signup'));
+
+  accountGoogleBtn.addEventListener('click', async () => {
+    accountAuthStatus.classList.add('hidden');
+    accountGoogleBtn.disabled = true;
+    try {
+      await signInWithGoogle(serverUrl);
+      await refreshAccountUI();
+    } catch (err) {
+      accountAuthStatus.className = 'status error';
+      accountAuthStatus.textContent = err.message;
+      accountAuthStatus.classList.remove('hidden');
+    } finally {
+      accountGoogleBtn.disabled = false;
+    }
+  });
 
   accountLogoutBtn.addEventListener('click', async () => {
     try {
