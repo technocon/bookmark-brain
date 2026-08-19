@@ -3,7 +3,7 @@ const express = require('express');
 const multer = require('multer');
 
 const db = require('./src/db');
-const { startImportJob, startImportJobFromList, startBackfillJob, startReembedJob, saveOneBookmark, getJob } = require('./src/jobs');
+const { startImportJob, startImportJobFromList, startBackfillJob, startReembedJob, startDuplicateScanJob, saveOneBookmark, getJob } = require('./src/jobs');
 const { search } = require('./src/search');
 const { activeProvider } = require('./src/embeddings');
 const { buildBookmarksHtml } = require('./src/exporter');
@@ -37,6 +37,10 @@ app.get('/api/stats', (req, res) => {
   const fallback = db.prepare(`SELECT COUNT(*) AS n FROM bookmarks WHERE status = 'fallback'`).get().n;
   const failed = db.prepare(`SELECT COUNT(*) AS n FROM bookmarks WHERE status = 'failed'`).get().n;
   const clusters = db.prepare(`SELECT COUNT(*) AS n FROM clusters`).get().n;
+  // An upper bound, not exact -- a group can go stale if its bookmarks
+  // were deleted since the last scan (GET /api/duplicates does the real
+  // live-membership filtering). Fine for a notification pill.
+  const duplicateGroups = db.prepare(`SELECT COUNT(*) AS n FROM duplicate_groups`).get().n;
   res.json({
     total,
     fetched,
@@ -44,6 +48,7 @@ app.get('/api/stats', (req, res) => {
     failed,
     indexed: fetched + fallback,
     clusters,
+    duplicateGroups,
     embeddingMode: activeProvider(),
   });
 });
@@ -214,6 +219,36 @@ app.post('/api/reembed', (req, res) => {
   }
   const jobId = startReembedJob();
   res.json({ jobId });
+});
+
+app.post('/api/duplicates/scan', (req, res) => {
+  const jobId = startDuplicateScanJob();
+  res.json({ jobId });
+});
+
+app.get('/api/duplicates', (req, res) => {
+  const groups = db
+    .prepare(`SELECT id, reason, similarity, bookmark_ids FROM duplicate_groups ORDER BY similarity DESC`)
+    .all();
+
+  const memberStmt = db.prepare(`SELECT id, url, title, page_title, favicon FROM bookmarks WHERE id = ?`);
+  const result = [];
+  for (const g of groups) {
+    const ids = JSON.parse(g.bookmark_ids);
+    const members = ids.map((id) => memberStmt.get(id)).filter(Boolean);
+    // Same staleness handling as the cloud edition: a group can outlive
+    // its members getting deleted elsewhere, so it's filtered out here at
+    // read time (needing 2+ live members) rather than kept in sync on write.
+    if (members.length < 2) continue;
+    result.push({
+      id: g.id,
+      reason: g.reason,
+      similarity: g.similarity,
+      bookmarks: members.map((b) => ({ id: b.id, url: b.url, title: b.page_title || b.title, favicon: b.favicon })),
+    });
+  }
+
+  res.json({ groups: result });
 });
 
 // Shared by single and bulk delete: decrements each affected cluster's

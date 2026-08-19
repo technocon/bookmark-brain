@@ -68,6 +68,14 @@ to add another provider later.
    folder do), so expect it to take a while and make one API call per
    bookmark against whatever embedding provider the cloud deployment has
    configured.
+7. The Import tab's **Find duplicates** button scans for bookmarks that
+   are likely the same thing saved twice — an exact URL saved with a
+   different tracking link or trailing slash ("url-variant"), or two
+   different URLs whose embedded content is near-identical ("semantic",
+   e.g. the same article re-shared from two different links). Runs as a
+   background job (it's an O(n²) comparison, so it can take a while on a
+   large collection) and never deletes anything itself — it surfaces
+   grouped matches in a drawer for you to review and pick what to keep.
 
 ## Architecture
 

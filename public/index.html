@@ -19,6 +19,7 @@
       <span class="stat-pill" id="stat-total">— bookmarks</span>
       <button class="stat-pill stat-pill-caution hidden" id="stat-fallback" title="Searchable by title only — the page itself couldn't be fetched"></button>
       <button class="stat-pill stat-pill-warn hidden" id="stat-failed" title="Not searchable — nothing could be embedded"></button>
+      <button class="stat-pill stat-pill-caution hidden" id="stat-duplicates" title="Possible duplicates — same URL variant or near-identical content"></button>
       <span class="stat-pill" id="stat-mode">—</span>
     </div>
   </header>
@@ -108,6 +109,21 @@
           <p id="reembed-progress-stage" class="progress-stage">Starting…</p>
         </div>
         <p id="reembed-result" class="reembed-result hidden"></p>
+      </div>
+
+      <div class="import-card hidden" id="duplicates-card">
+        <h2>Find duplicates</h2>
+        <p class="muted">
+          Scans for bookmarks that are likely the same thing saved twice — the same URL with a different tracking
+          link or a trailing slash, or two different links to near-identical content. Doesn't delete anything on
+          its own; you review each match and pick what to keep.
+        </p>
+        <button id="duplicates-scan-btn" class="btn">Scan for duplicates</button>
+        <div id="duplicates-progress" class="import-progress hidden">
+          <div class="progress-bar"><div class="progress-fill" id="duplicates-progress-fill"></div></div>
+          <p id="duplicates-progress-stage" class="progress-stage">Starting…</p>
+        </div>
+        <p id="duplicates-result" class="reembed-result hidden"></p>
       </div>
     </section>
   </main>

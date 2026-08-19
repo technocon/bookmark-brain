@@ -36,6 +36,14 @@ db.exec(`
     created_at INTEGER NOT NULL DEFAULT (unixepoch())
   );
 
+  CREATE TABLE IF NOT EXISTS duplicate_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    reason TEXT NOT NULL, -- 'url-variant' | 'semantic'
+    similarity REAL NOT NULL,
+    bookmark_ids TEXT NOT NULL, -- JSON array, same convention as clusters.terms
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+  );
+
   CREATE TABLE IF NOT EXISTS jobs (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL,

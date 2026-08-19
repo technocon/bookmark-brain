@@ -156,9 +156,20 @@
     } else {
       reembedCard.classList.add('hidden');
     }
+
+    document.getElementById('duplicates-card').classList.toggle('hidden', s.indexed === 0);
+
+    const duplicatesPill = document.getElementById('stat-duplicates');
+    if (s.duplicateGroups > 0) {
+      duplicatesPill.textContent = `${s.duplicateGroups} possible dup${s.duplicateGroups === 1 ? '' : 's'}`;
+      duplicatesPill.classList.remove('hidden');
+    } else {
+      duplicatesPill.classList.add('hidden');
+    }
   }
   document.getElementById('stat-fallback').addEventListener('click', openFallbackDrawer);
   document.getElementById('stat-failed').addEventListener('click', openFailedDrawer);
+  document.getElementById('stat-duplicates').addEventListener('click', openDuplicatesDrawer);
   document.getElementById('view-failed-btn').addEventListener('click', openFailedDrawer);
 
   function clearDrawerActions() {
@@ -265,6 +276,54 @@
       drawerList,
       bookmarks.map((b) => ({ ...b, contentAvailable: false, fetchError: b.fetch_error }))
     );
+  }
+
+  // ---------- possible duplicates ----------
+  async function openDuplicatesDrawer() {
+    drawerTitle.textContent = 'Possible duplicates';
+    drawerList.innerHTML = '';
+    clearDrawerActions();
+    document.getElementById('drawer-actions').classList.remove('hidden');
+    document.getElementById('drawer-actions').innerHTML =
+      `<p class="drawer-note">Grouped by likely match. Nothing's pre-selected to delete except the extras in each group — review before deleting, this can't be undone.</p>`;
+    overlay.classList.remove('hidden');
+    currentDrawerRefetch = openDuplicatesDrawer;
+    const res = await fetch('/api/duplicates');
+    const { groups } = await res.json();
+    renderDuplicatesList(groups);
+  }
+
+  function renderDuplicatesList(groups) {
+    if (!groups.length) {
+      drawerList.innerHTML = `<li class="empty-state"><p class="muted">No duplicates found.</p></li>`;
+      refreshSelectionBarFor(drawerList);
+      return;
+    }
+    drawerList.innerHTML = groups
+      .map((g) => {
+        const label =
+          g.reason === 'url-variant'
+            ? 'Same page, different link'
+            : `Looks like the same content — ${Math.round(g.similarity * 100)}% match`;
+        const items = g.bookmarks
+          .map(
+            (b, i) => `
+          <li>
+            <input type="checkbox" class="select-checkbox" data-select-id="${b.id}" aria-label="Select bookmark" ${i > 0 ? 'checked' : ''} />
+            <a class="result-item" href="${escapeAttr(b.url)}" target="_blank" rel="noopener noreferrer">
+              <img class="favicon" src="${escapeAttr(faviconUrl(b.favicon, b.url))}" onerror="this.style.visibility='hidden'" />
+              <div class="result-body">
+                <div class="result-title">${escapeHtml(b.title || b.url)}</div>
+                <div class="result-url">${escapeHtml(displayUrl(b.url))}</div>
+              </div>
+            </a>
+          </li>`
+          )
+          .join('');
+        return `<li class="dup-group"><p class="dup-group-label">${escapeHtml(label)}</p><ul class="result-list dup-group-list">${items}</ul></li>`;
+      })
+      .join('');
+    refreshSelectionBarFor(drawerList);
   }
 
   // ---------- search ----------
@@ -551,6 +610,58 @@
       reembedResult.textContent = err.message;
       reembedResult.classList.add('error');
       reembedResult.classList.remove('hidden');
+    }
+  });
+
+  // ---------- duplicate scan ----------
+  const duplicatesScanBtn = document.getElementById('duplicates-scan-btn');
+  const duplicatesProgress = document.getElementById('duplicates-progress');
+  const duplicatesProgressFill = document.getElementById('duplicates-progress-fill');
+  const duplicatesProgressStage = document.getElementById('duplicates-progress-stage');
+  const duplicatesResult = document.getElementById('duplicates-result');
+
+  duplicatesScanBtn.addEventListener('click', async () => {
+    duplicatesResult.classList.add('hidden');
+    duplicatesScanBtn.disabled = true;
+    duplicatesProgress.classList.remove('hidden');
+    duplicatesProgressFill.style.width = '20%';
+    duplicatesProgressStage.textContent = 'Scanning…';
+
+    try {
+      const res = await fetch('/api/duplicates/scan', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Scan failed');
+
+      pollJob(data.jobId, {
+        onTick: (job) => {
+          duplicatesProgressFill.style.width = job.status === 'done' ? '100%' : '60%';
+          duplicatesProgressStage.textContent = job.stage || 'Working…';
+        },
+        onDone: (job) => {
+          duplicatesProgress.classList.add('hidden');
+          duplicatesScanBtn.disabled = false;
+          duplicatesResult.textContent =
+            job.total > 0
+              ? `Found ${job.total} possible duplicate group${job.total === 1 ? '' : 's'} — check the "possible dups" pill above to review.`
+              : 'No duplicates found.';
+          duplicatesResult.classList.remove('error');
+          duplicatesResult.classList.remove('hidden');
+          loadStats();
+        },
+        onError: (msg) => {
+          duplicatesProgress.classList.add('hidden');
+          duplicatesScanBtn.disabled = false;
+          duplicatesResult.textContent = msg;
+          duplicatesResult.classList.add('error');
+          duplicatesResult.classList.remove('hidden');
+        },
+      });
+    } catch (err) {
+      duplicatesProgress.classList.add('hidden');
+      duplicatesScanBtn.disabled = false;
+      duplicatesResult.textContent = err.message;
+      duplicatesResult.classList.add('error');
+      duplicatesResult.classList.remove('hidden');
     }
   });
 

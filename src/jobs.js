@@ -12,6 +12,7 @@ const {
   activeProvider,
 } = require('./embeddings');
 const { clusterBookmarks } = require('./cluster');
+const { findDuplicateGroups } = require('./dedupe');
 
 const FETCH_CONCURRENCY = 8;
 
@@ -370,6 +371,46 @@ async function runReembedPipeline(jobId) {
 }
 
 /**
+ * Scans the whole collection for likely duplicates (URL variants and
+ * near-identical embeddings) and replaces the persisted duplicate_groups
+ * with the fresh result. On-demand only (like reembed) -- running this
+ * after every single-bookmark save would mean rescanning the whole
+ * collection for one new row, not worth the CPU.
+ */
+function startDuplicateScanJob() {
+  const jobId = createJobRow('duplicates');
+  runDuplicateScan(jobId).catch((err) => {
+    updateJob(jobId, { status: 'error', error: err.message });
+  });
+  return jobId;
+}
+
+async function runDuplicateScan(jobId) {
+  updateJob(jobId, { stage: 'scanning for duplicates' });
+
+  const bookmarks = db
+    .prepare(
+      `SELECT id, url, status, embedding, length(page_text) AS contentLength
+       FROM bookmarks WHERE status IN ('fetched', 'fallback')`
+    )
+    .all();
+  const groups = await findDuplicateGroups(bookmarks);
+
+  const replaceGroups = db.transaction((items) => {
+    db.prepare(`DELETE FROM duplicate_groups`).run();
+    const insert = db.prepare(
+      `INSERT INTO duplicate_groups (reason, similarity, bookmark_ids) VALUES (?, ?, ?)`
+    );
+    for (const g of items) {
+      insert.run(g.reason, g.similarity, JSON.stringify(g.bookmarkIds));
+    }
+  });
+  replaceGroups(groups);
+
+  updateJob(jobId, { status: 'done', stage: 'done', total: groups.length, done: groups.length });
+}
+
+/**
  * Places a freshly-embedded bookmark into whichever existing cluster it's
  * closest to, without re-running k-means over the whole collection — a
  * full recluster is fine for a batch import but would make every single
@@ -447,6 +488,7 @@ module.exports = {
   startImportJobFromList,
   startBackfillJob,
   startReembedJob,
+  startDuplicateScanJob,
   saveOneBookmark,
   getJob,
 };

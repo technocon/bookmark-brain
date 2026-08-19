@@ -246,6 +246,11 @@ main {
 .drawer-actions.hidden { display: none; }
 .drawer-note { font-size: 12.5px; color: var(--text-faint); margin: 6px 0 0; }
 
+.dup-group { flex-direction: column; align-items: stretch; }
+.dup-group + .dup-group { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--border); }
+.dup-group-label { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--text-dim); }
+.dup-group-list { margin: 0; }
+
 .select-bar {
   display: flex;
   align-items: center;
