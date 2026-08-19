@@ -6,6 +6,7 @@ const db = require('./src/db');
 const { startImportJob, startImportJobFromList, startBackfillJob, startReembedJob, saveOneBookmark, getJob } = require('./src/jobs');
 const { search } = require('./src/search');
 const { activeProvider } = require('./src/embeddings');
+const { buildBookmarksHtml } = require('./src/exporter');
 
 const app = express();
 const upload = multer({
@@ -80,6 +81,22 @@ app.post('/api/import-json', (req, res) => {
 
   const jobId = startImportJobFromList(cleaned);
   res.json({ jobId });
+});
+
+// Exports everything as a standard bookmarks.html — for backup, or to move
+// this collection into another Bookmark Brain server (this one's own
+// Import tab, or the hosted edition's) via the same file-upload flow used
+// for a fresh import. Uses the fetched page title when available (more
+// reliable than whatever the browser had at save time), falling back to
+// the original title otherwise.
+app.get('/api/export', (req, res) => {
+  const bookmarks = db
+    .prepare(`SELECT url, COALESCE(page_title, title) AS title, folder, added_at AS addedAt FROM bookmarks ORDER BY folder, title`)
+    .all();
+  const html = buildBookmarksHtml(bookmarks);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="bookmark-brain-export.html"');
+  res.send(html);
 });
 
 // Single-bookmark save — the extension's toolbar "Save this page" button

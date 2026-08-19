@@ -401,6 +401,7 @@ main {
   border: 1px solid var(--border);
 }
 .btn-ghost:hover { filter: none; color: var(--text); border-color: var(--accent); }
+a.btn { display: inline-block; text-decoration: none; }
 
 .result-error {
   font-size: 12.5px;

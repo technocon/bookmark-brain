@@ -59,6 +59,15 @@ to add another provider later.
 5. The extension also adds a **Save this page** button and a right-click
    "Save to Bookmark Brain" — both fetch/embed/cluster a single URL
    instantly, no full re-import needed.
+6. The Import tab's **Export** button downloads everything as a standard
+   `bookmarks.html` — for backup, or to move this collection to the
+   [hosted edition](https://github.com/technocon/bookmark-brain-cloud):
+   sign up there, open its own Import tab, and drop in the file you just
+   exported here. It re-fetches and re-embeds every page fresh (nothing
+   about status, clusters, or embeddings carries over — only url/title/
+   folder do), so expect it to take a while and make one API call per
+   bookmark against whatever embedding provider the cloud deployment has
+   configured.
 
 ## Architecture
 
