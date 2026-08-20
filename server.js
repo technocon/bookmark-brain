@@ -37,10 +37,18 @@ app.get('/api/stats', (req, res) => {
   const fallback = db.prepare(`SELECT COUNT(*) AS n FROM bookmarks WHERE status = 'fallback'`).get().n;
   const failed = db.prepare(`SELECT COUNT(*) AS n FROM bookmarks WHERE status = 'failed'`).get().n;
   const clusters = db.prepare(`SELECT COUNT(*) AS n FROM clusters`).get().n;
-  // An upper bound, not exact -- a group can go stale if its bookmarks
-  // were deleted since the last scan (GET /api/duplicates does the real
-  // live-membership filtering). Fine for a notification pill.
-  const duplicateGroups = db.prepare(`SELECT COUNT(*) AS n FROM duplicate_groups`).get().n;
+  // Counts only groups that still have 2+ live members -- a plain COUNT(*)
+  // over duplicate_groups would keep reporting stale groups forever, since
+  // nothing prunes that table except a fresh scan, and deleting a group's
+  // bookmarks through the drawer (the normal way to act on a finding)
+  // doesn't touch it. Matches the same live-membership filtering
+  // GET /api/duplicates already does, so the pill and the drawer never
+  // disagree.
+  const bookmarkExistsStmt = db.prepare(`SELECT 1 FROM bookmarks WHERE id = ?`);
+  const duplicateGroups = db
+    .prepare(`SELECT bookmark_ids FROM duplicate_groups`)
+    .all()
+    .filter((g) => JSON.parse(g.bookmark_ids).filter((id) => bookmarkExistsStmt.get(id)).length >= 2).length;
   res.json({
     total,
     fetched,
