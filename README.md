@@ -8,9 +8,10 @@ tree you have to remember.
 This is the **self-hosted, single-tenant** edition — one person, their own
 machine, no accounts. A companion
 [Chrome extension](extension/README.md) lives in this repo (search from the
-toolbar, one-click save, direct Chrome-bookmarks import) and pairs with
-either this app or the **hosted, multi-tenant, subscription** edition at
-[github.com/technocon/bookmark-brain-cloud](https://github.com/technocon/bookmark-brain-cloud)
+toolbar, one-click save, direct Chrome-bookmarks import) — get it from the
+[Chrome Web Store](https://chromewebstore.google.com/detail/bookmark-brain/jleoijmjcmcjhkagaipoppimfopdckhh)
+— and pairs with either this app or the **hosted, multi-tenant,
+subscription** edition at [bookmarkbrain.site](https://bookmarkbrain.site)
 — same product, rearchitected with accounts and Stripe billing to run as a
 paid service for many users at once.
 
@@ -61,13 +62,12 @@ to add another provider later.
    instantly, no full re-import needed.
 6. The Import tab's **Export** button downloads everything as a standard
    `bookmarks.html` — for backup, or to move this collection to the
-   [hosted edition](https://github.com/technocon/bookmark-brain-cloud):
-   sign up there, open its own Import tab, and drop in the file you just
-   exported here. It re-fetches and re-embeds every page fresh (nothing
-   about status, clusters, or embeddings carries over — only url/title/
-   folder do), so expect it to take a while and make one API call per
-   bookmark against whatever embedding provider the cloud deployment has
-   configured.
+   [hosted edition](https://bookmarkbrain.site): sign up there, open its
+   own Import tab, and drop in the file you just exported here. It
+   re-fetches and re-embeds every page fresh (nothing about status,
+   clusters, or embeddings carries over — only url/title/folder do), so
+   expect it to take a while and make one API call per bookmark against
+   whatever embedding provider the cloud deployment has configured.
 7. The Import tab's **Find duplicates** button scans for bookmarks that
    are likely the same thing saved twice — an exact URL saved with a
    different tracking link or trailing slash ("url-variant"), or two

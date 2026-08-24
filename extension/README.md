@@ -1,9 +1,10 @@
 # Bookmark Brain — Chrome extension
 
+Available on the
+[Chrome Web Store](https://chromewebstore.google.com/detail/bookmark-brain/jleoijmjcmcjhkagaipoppimfopdckhh).
 Pairs with either edition of the server — this repo's own self-hosted
 single-tenant app (the `server.js` one directory up), or the hosted
-multi-tenant edition at
-[github.com/technocon/bookmark-brain-cloud](https://github.com/technocon/bookmark-brain-cloud)
+multi-tenant edition at [bookmarkbrain.site](https://bookmarkbrain.site)
 — to add:
 
 - **Search from the toolbar** — semantic search without opening the web app.
@@ -11,6 +12,13 @@ multi-tenant edition at
   "Save to Bookmark Brain". Fetches, embeds, and clusters it immediately.
 - **Direct bookmark import** — reads your Chrome bookmarks via
   `chrome.bookmarks`, no manual export/upload step.
+
+## Install
+
+Get it from the
+[Chrome Web Store](https://chromewebstore.google.com/detail/bookmark-brain/jleoijmjcmcjhkagaipoppimfopdckhh)
+— that's the normal path for actually using it. The steps below are only
+for loading the extension from source, e.g. to modify it.
 
 ## Load it (unpacked, for development)
 
@@ -55,11 +63,12 @@ Cloud project, using this extension's actual ID (visible on its card at
 `chrome://extensions` once loaded). Put that client's ID into this
 manifest's `oauth2.client_id`, replacing the
 `YOUR_CHROME_EXTENSION_OAUTH_CLIENT_ID...` placeholder, then reload the
-extension. Full setup steps (both client types) are in
-[bookmark-brain-cloud's README](https://github.com/technocon/bookmark-brain-cloud#google-sign-in-optional).
-Until that's filled in, the button still shows (if the server has it
-configured) but clicking it fails with a Chrome-side "bad client id" error
-— expected, not a bug, until a real ID is in place.
+extension. This is server-side setup specific to whichever hosted server
+you're pointing at — the self-hosted edition in this repo has no accounts
+at all, so it never shows this button. Until a real client ID is in
+place, the button still shows (if the server has it configured) but
+clicking it fails with a Chrome-side "bad client id" error — expected,
+not a bug.
 
 ## Files
 
