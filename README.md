@@ -1,5 +1,7 @@
 # Bookmark Brain
 
+![Typing a vague description into Bookmark Brain and it finding the matching saved articles](demo.gif)
+
 Semantic search and auto-generated topic clusters for your browser bookmarks.
 Import your existing bookmarks, Bookmark Brain fetches and embeds each page,
 then gives you a search box and a clustered topic view instead of a folder

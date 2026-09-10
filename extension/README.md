@@ -1,5 +1,7 @@
 # Bookmark Brain — Chrome extension
 
+![Typing a vague description into the extension popup and it finding the matching saved articles](../demo.gif)
+
 Available on the
 [Chrome Web Store](https://chromewebstore.google.com/detail/bookmark-brain/jleoijmjcmcjhkagaipoppimfopdckhh).
 Pairs with either edition of the server — this repo's own self-hosted
