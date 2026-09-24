@@ -78,6 +78,13 @@ to add another provider later.
    background job (it's an O(n²) comparison, so it can take a while on a
    large collection) and never deletes anything itself — it surfaces
    grouped matches in a drawer for you to review and pick what to keep.
+8. The Search tab has a **paste-a-link bar** above the search box: paste
+   any URL (the `https://` is optional) and it's fetched, embedded, and
+   saved on the spot — no extension or export needed. Paste several links
+   separated by spaces or new lines and they're saved as one background
+   job with a running "N of M" count. Links already in your collection are
+   reported rather than duplicated. It uses the same `POST /api/bookmarks`
+   and `POST /api/import-json` routes as the extension and the Import tab.
 
 ## Architecture
 

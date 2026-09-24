@@ -33,6 +33,12 @@
   <main>
     <!-- SEARCH -->
     <section class="panel active" id="panel-search">
+      <form id="add-url-form" class="add-url-form" autocomplete="off">
+        <input id="add-url-input" type="text" inputmode="url" placeholder="Paste a link to save it to your collection" aria-label="Paste a link to save" />
+        <button type="submit" id="add-url-btn" class="btn">Save link</button>
+      </form>
+      <p id="add-url-status" class="add-url-status hidden" role="status"></p>
+
       <div class="search-box">
         <input id="search-input" type="text" placeholder="Describe what you're looking for — “that article about pricing psychology”" autocomplete="off" />
       </div>

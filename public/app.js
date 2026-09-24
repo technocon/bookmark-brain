@@ -395,6 +395,122 @@
     refreshSelectionBarFor(container);
   }
 
+  // ---------- paste a link to save it ----------
+  const addUrlForm = document.getElementById('add-url-form');
+  const addUrlInput = document.getElementById('add-url-input');
+  const addUrlBtn = document.getElementById('add-url-btn');
+  const addUrlStatus = document.getElementById('add-url-status');
+
+  function setAddStatus(html, kind) {
+    addUrlStatus.innerHTML = html;
+    addUrlStatus.className = `add-url-status${kind ? ' ' + kind : ''}`;
+  }
+
+  // Pulls every link out of pasted text: whitespace-separated, scheme
+  // optional ("example.com/a" becomes https://example.com/a), de-duplicated.
+  function extractUrls(text) {
+    const seen = new Set();
+    const urls = [];
+    for (const raw of text.split(/\s+/)) {
+      let token = raw.replace(/^[<"']+/, '').replace(/[>"'.,;]+$/, '');
+      if (!token) continue;
+      if (!/^https?:\/\//i.test(token)) {
+        if (!/^(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}([/?#]\S*)?$/i.test(token)) continue;
+        token = 'https://' + token;
+      }
+      try {
+        new URL(token);
+      } catch {
+        continue;
+      }
+      if (!seen.has(token)) {
+        seen.add(token);
+        urls.push(token);
+      }
+    }
+    return urls;
+  }
+
+  async function saveOneLink(url) {
+    const res = await fetch('/api/bookmarks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Could not save that link.');
+    const title = escapeHtml(data.bookmark.title || url);
+    const link = `<a href="${escapeAttr(data.bookmark.url)}" target="_blank" rel="noopener noreferrer">${title}</a>`;
+    if (data.outcome === 'already-saved') {
+      setAddStatus(`Already in your collection: ${link}`, 'ok');
+    } else if (data.outcome === 'partial') {
+      setAddStatus(`Saved ${link} — the page couldn't be read, so it's searchable by title only.`, 'ok');
+    } else if (data.outcome === 'failed') {
+      setAddStatus(`Saved ${link}, but it couldn't be indexed yet — see the “failed” count above to retry.`, 'error');
+    } else {
+      setAddStatus(`Saved ${link}`, 'ok');
+    }
+  }
+
+  async function saveManyLinks(urls) {
+    const res = await fetch('/api/import-json', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bookmarks: urls.map((url) => ({ url })) }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Could not save those links.');
+    await new Promise((resolve, reject) => {
+      pollJob(data.jobId, {
+        onTick: (job) => setAddStatus(`Saving ${job.done + job.partial + job.failed} of ${job.total} links…`),
+        onDone: (job) => {
+          const saved = job.done + job.partial;
+          setAddStatus(
+            `Saved ${saved} of ${job.total} links${job.failed ? ` (${job.failed} couldn't be indexed)` : ''}.`,
+            job.failed ? 'error' : 'ok'
+          );
+          resolve();
+        },
+        onError: (message) => reject(new Error(message)),
+      });
+    });
+  }
+
+  async function submitAddUrl() {
+    const urls = extractUrls(addUrlInput.value);
+    if (urls.length === 0) {
+      setAddStatus("That doesn't look like a link — paste a full URL, like https://example.com/article.", 'error');
+      return;
+    }
+    addUrlBtn.disabled = true;
+    addUrlInput.disabled = true;
+    setAddStatus(urls.length === 1 ? 'Saving…' : `Saving ${urls.length} links…`);
+    try {
+      if (urls.length === 1) await saveOneLink(urls[0]);
+      else await saveManyLinks(urls);
+      addUrlInput.value = '';
+      loadStats();
+      if (searchInput.value.trim()) runSearch(searchInput.value.trim());
+    } catch (err) {
+      setAddStatus(escapeHtml(err.message), 'error');
+    } finally {
+      addUrlBtn.disabled = false;
+      addUrlInput.disabled = false;
+      addUrlInput.focus();
+    }
+  }
+
+  addUrlForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    submitAddUrl();
+  });
+  // Pasting a link saves it straight away -- no separate click needed.
+  addUrlInput.addEventListener('paste', () => {
+    setTimeout(() => {
+      if (extractUrls(addUrlInput.value).length > 0) submitAddUrl();
+    }, 0);
+  });
+
   // ---------- clusters ----------
   const clusterGrid = document.getElementById('cluster-grid');
   const clustersEmpty = document.getElementById('clusters-empty');

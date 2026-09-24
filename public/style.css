@@ -134,6 +134,30 @@ main {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+.add-url-form { display: flex; gap: 8px; margin-bottom: 12px; }
+.add-url-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 14px;
+  font-size: 14px;
+  background: var(--bg-elev);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.add-url-form input:focus {
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.add-url-form .btn { flex-shrink: 0; margin-top: 0; padding-left: 18px; padding-right: 18px; }
+.add-url-form .btn:disabled, .add-url-form input:disabled { opacity: 0.6; cursor: default; }
+.add-url-status { margin: 0 0 14px; font-size: 13px; color: var(--text-dim); }
+.add-url-status.ok { color: var(--accent-2); }
+.add-url-status.error { color: var(--danger); }
+.add-url-status a { color: inherit; text-decoration: underline; }
+
 .empty-state {
   padding: 60px 10px;
   text-align: center;
