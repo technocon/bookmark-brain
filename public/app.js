@@ -1,18 +1,18 @@
 (function () {
-  const tabs = document.querySelectorAll('.tab');
-  const panels = {
-    search: document.getElementById('panel-search'),
-    clusters: document.getElementById('panel-clusters'),
-    import: document.getElementById('panel-import'),
-  };
-
-  function showTab(name) {
-    tabs.forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
-    Object.entries(panels).forEach(([key, el]) => el.classList.toggle('active', key === name));
-    if (name === 'clusters') loadClusters();
+  // ---------- theme picker (System / Light / Dark) ----------
+  // theme.js already applied the saved choice before first paint; this just
+  // reflects it on every picker and handles clicks.
+  function syncThemePickers() {
+    const mode = window.BBTheme ? window.BBTheme.get() : 'system';
+    document.querySelectorAll('[data-theme-mode]').forEach((b) => b.classList.toggle('active', b.dataset.themeMode === mode));
   }
-
-  tabs.forEach((t) => t.addEventListener('click', () => showTab(t.dataset.tab)));
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-theme-mode]');
+    if (!btn || !window.BBTheme) return;
+    window.BBTheme.set(btn.dataset.themeMode);
+    syncThemePickers();
+  });
+  syncThemePickers();
 
   function faviconUrl(favicon, pageUrl) {
     if (favicon) return favicon;
@@ -157,6 +157,10 @@
       reembedCard.classList.add('hidden');
     }
 
+    const previewsCard = document.getElementById('previews-card');
+    previewsCard.classList.toggle('hidden', !(s.missingImages > 0));
+    document.getElementById('previews-missing').textContent = `${s.missingImages} of ${s.indexed}`;
+
     document.getElementById('duplicates-card').classList.toggle('hidden', s.indexed === 0);
 
     const duplicatesPill = document.getElementById('stat-duplicates');
@@ -166,6 +170,9 @@
     } else {
       duplicatesPill.classList.add('hidden');
     }
+
+    // Counts moved, so the sidebar's lists (and their badges) did too.
+    loadClusters().catch(() => {});
   }
   document.getElementById('stat-fallback').addEventListener('click', openFallbackDrawer);
   document.getElementById('stat-failed').addEventListener('click', openFailedDrawer);
@@ -326,11 +333,45 @@
     refreshSelectionBarFor(drawerList);
   }
 
-  // ---------- search ----------
+  // ---------- library: sidebar lists, recent saves, search ----------
   const searchInput = document.getElementById('search-input');
   const searchResults = document.getElementById('search-results');
-  const searchEmpty = document.getElementById('search-empty');
+  const clusterList = document.getElementById('cluster-list');
+  const clustersEmpty = document.getElementById('clusters-empty');
+  const viewTitle = document.getElementById('view-title');
+  const viewCount = document.getElementById('view-count');
+  const viewIcon = document.getElementById('view-icon');
+
+  // Each list gets a stable colour and an initial, so the sidebar is
+  // scannable at a glance (there are no user-chosen icons to store).
+  const LIST_COLORS = ['#f59e0b', '#6366f1', '#64748b', '#10b981', '#ec4899', '#0ea5e9', '#8b5cf6', '#ef4444'];
+  function listIconStyle(id) {
+    return `background:${LIST_COLORS[Math.abs(Number(id) || 0) % LIST_COLORS.length]}`;
+  }
+  function listInitial(label) {
+    const m = String(label || '').match(/[A-Za-z0-9]/);
+    return m ? m[0].toUpperCase() : '•';
+  }
+
+  // Card grid vs. compact rows -- remembered per browser.
+  let viewMode = 'grid';
+  try {
+    if (localStorage.getItem('bookmarkbrain_view_mode') === 'list') viewMode = 'list';
+  } catch {}
+  function applyViewMode() {
+    searchResults.classList.toggle('list-mode', viewMode === 'list');
+    document.getElementById('view-mode-grid').classList.toggle('active', viewMode === 'grid');
+    document.getElementById('view-mode-list').classList.toggle('active', viewMode === 'list');
+  }
+  const panels = {
+    library: document.getElementById('panel-library'),
+    import: document.getElementById('panel-import'),
+  };
   let searchTimer = null;
+  let viewToken = 0; // guards against a slow response overwriting a newer view
+  let currentView = { type: 'recent' };
+  let lastListView = { type: 'recent' }; // where clearing the search box returns to
+
   enableDeleteHandling(searchResults);
   setupSelectionBar({
     container: searchResults,
@@ -338,26 +379,160 @@
     selectAllCheckbox: document.getElementById('search-select-all'),
     countEl: document.getElementById('search-select-count'),
     deleteBtn: document.getElementById('search-delete-selected'),
-    refetch: () => runSearch(searchInput.value.trim()),
+    refetch: () => loadCurrentList(),
   });
+
+  function setActiveNav() {
+    document.querySelectorAll('#sidebar .side-item').forEach((el) => {
+      const active =
+        (currentView.type === 'recent' && el.dataset.view === 'recent') ||
+        (currentView.type === 'import' && el.dataset.view === 'import') ||
+        (currentView.type === 'cluster' && el.dataset.clusterId === String(currentView.id));
+      el.classList.toggle('active', active);
+    });
+  }
+
+  async function showView(view) {
+    currentView = view;
+    if (view.type === 'recent' || view.type === 'cluster') lastListView = view;
+    document.body.classList.remove('sidebar-open');
+    if (view.type !== 'search') addUrlStatus.className = 'add-url-status hidden';
+    const isImport = view.type === 'import';
+    panels.library.classList.toggle('active', !isImport);
+    panels.import.classList.toggle('active', isImport);
+    setActiveNav();
+    if (isImport) return;
+    if (view.type !== 'search') searchInput.value = '';
+    await loadCurrentList();
+  }
+
+  async function loadCurrentList() {
+    const token = ++viewToken;
+    const view = currentView;
+    let items;
+    let title;
+    let countLabel;
+    let emptyMessage;
+    if (view.type === 'search') {
+      const res = await fetch(`/api/search?q=${encodeURIComponent(view.q)}`);
+      items = (await res.json()).results;
+      title = `Results for “${view.q}”`;
+      countLabel = (n) => `${n} match${n === 1 ? '' : 'es'}`;
+      emptyMessage = 'No matches yet — try a different phrase.';
+    } else if (view.type === 'cluster') {
+      const res = await fetch(`/api/clusters/${view.id}/bookmarks`);
+      items = (await res.json()).bookmarks;
+      title = view.label;
+      countLabel = (n) => `${n} bookmark${n === 1 ? '' : 's'}`;
+      emptyMessage = 'This list is empty.';
+    } else {
+      const res = await fetch('/api/bookmarks/recent');
+      items = (await res.json()).bookmarks;
+      title = 'Recently saved';
+      countLabel = (n) => `latest ${n}`;
+      emptyMessage = 'Nothing saved yet — paste a link above, or import your bookmarks.';
+    }
+    if (token !== viewToken) return;
+    viewTitle.textContent = title;
+    viewCount.textContent = items.length ? countLabel(items.length) : '';
+    if (view.type === 'cluster') {
+      viewIcon.textContent = listInitial(view.label);
+      viewIcon.setAttribute('style', listIconStyle(view.id));
+      viewIcon.classList.remove('hidden');
+    } else {
+      viewIcon.classList.add('hidden');
+    }
+    renderCards(searchResults, items, { emptyMessage });
+  }
+
+  // Re-render whatever list is showing (after a save or import) without
+  // yanking the user out of the Import panel.
+  function refreshView() {
+    if (currentView.type !== 'import') loadCurrentList().catch(() => {});
+  }
 
   searchInput.addEventListener('input', () => {
     clearTimeout(searchTimer);
     const q = searchInput.value.trim();
     if (!q) {
-      searchResults.innerHTML = '';
-      searchEmpty.style.display = '';
-      refreshSelectionBarFor(searchResults);
+      showView(lastListView).catch(() => {});
       return;
     }
     searchTimer = setTimeout(() => runSearch(q), 220);
   });
 
-  async function runSearch(q) {
-    searchEmpty.style.display = 'none';
-    const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
-    const { results } = await res.json();
-    renderResults(searchResults, results);
+  function runSearch(q) {
+    return showView({ type: 'search', q });
+  }
+
+  document.getElementById('sidebar').addEventListener('click', (e) => {
+    const item = e.target.closest('.side-item');
+    if (!item) return;
+    if (item.dataset.view === 'import') showView({ type: 'import' });
+    else if (item.dataset.view === 'recent') showView({ type: 'recent' });
+    else if (item.dataset.clusterId) {
+      showView({
+        type: 'cluster',
+        id: item.dataset.clusterId,
+        label: item.querySelector('.side-item-label').textContent,
+      });
+    }
+  });
+  function setViewMode(mode) {
+    viewMode = mode;
+    try {
+      localStorage.setItem('bookmarkbrain_view_mode', mode);
+    } catch {}
+    applyViewMode();
+  }
+  document.getElementById('view-mode-grid').addEventListener('click', () => setViewMode('grid'));
+  document.getElementById('view-mode-list').addEventListener('click', () => setViewMode('list'));
+  applyViewMode();
+
+  document.getElementById('sidebar-toggle').addEventListener('click', () => document.body.classList.add('sidebar-open'));
+  document.getElementById('sidebar-close').addEventListener('click', () => document.body.classList.remove('sidebar-open'));
+  document.getElementById('sidebar-backdrop').addEventListener('click', () => document.body.classList.remove('sidebar-open'));
+
+  function renderCards(container, items, { emptyMessage = 'Nothing here yet.' } = {}) {
+    if (!items.length) {
+      container.innerHTML = `<li class="grid-empty"><p>${escapeHtml(emptyMessage)}</p></li>`;
+      refreshSelectionBarFor(container);
+      return;
+    }
+    container.innerHTML = items
+      .map((r) => {
+        const isFallback = r.contentAvailable === false;
+        const favicon = escapeAttr(faviconUrl(r.favicon, r.url));
+        const image = r.image
+          ? `<img class="card-thumb-img" src="${escapeAttr(r.image)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.card-thumb').classList.add('no-image');this.remove()" />`
+          : '';
+        const tag = isFallback
+          ? `<span class="result-tag" title="${escapeAttr('Page unreachable: ' + (r.fetchError || 'unknown error'))}">Title only</span>`
+          : '';
+        const score = r.score !== undefined ? `<span class="result-score${isFallback ? ' result-score-fallback' : ''}">${Math.round(r.score * 100)}%</span>` : '';
+        return `
+        <li class="card">
+          <a class="card-link" href="${escapeAttr(r.url)}" target="_blank" rel="noopener noreferrer">
+            <div class="card-thumb${r.image ? '' : ' no-image'}">
+              ${image}
+              <img class="card-thumb-favicon" src="${favicon}" alt="" onerror="this.style.visibility='hidden'" />
+            </div>
+            <div class="card-body">
+              <div class="card-title">${escapeHtml(r.title || r.url)}</div>
+              ${r.description ? `<div class="card-desc">${escapeHtml(r.description)}</div>` : ''}
+              <div class="card-meta">
+                <img class="favicon" src="${favicon}" alt="" onerror="this.style.visibility='hidden'" />
+                <span class="card-host">${escapeHtml(displayUrl(r.url))}</span>
+                ${tag}${score}
+              </div>
+            </div>
+          </a>
+          ${selectCheckboxHtml(r.id)}
+          ${deleteButtonHtml(r.id, r.title || r.url)}
+        </li>`;
+      })
+      .join('');
+    refreshSelectionBarFor(container);
   }
 
   function renderResults(container, items) {
@@ -490,7 +665,7 @@
       else await saveManyLinks(urls);
       addUrlInput.value = '';
       loadStats();
-      if (searchInput.value.trim()) runSearch(searchInput.value.trim());
+      refreshView();
     } catch (err) {
       setAddStatus(escapeHtml(err.message), 'error');
     } finally {
@@ -511,37 +686,28 @@
     }, 0);
   });
 
-  // ---------- clusters ----------
-  const clusterGrid = document.getElementById('cluster-grid');
-  const clustersEmpty = document.getElementById('clusters-empty');
-
+  // ---------- clusters (the sidebar's lists) ----------
   async function loadClusters() {
     const res = await fetch('/api/clusters');
     const { clusters } = await res.json();
-    if (!clusters.length) {
-      clustersEmpty.style.display = '';
-      clusterGrid.innerHTML = '';
-      return;
-    }
-    clustersEmpty.style.display = 'none';
-    clusterGrid.innerHTML = clusters
+    clustersEmpty.classList.toggle('hidden', clusters.length > 0);
+    clusterList.innerHTML = clusters
       .map(
         (c) => `
-        <button class="cluster-card" data-cluster-id="${c.id}">
-          <div class="cluster-label">${escapeHtml(c.label)}</div>
-          <div class="cluster-count">${c.size} bookmark${c.size === 1 ? '' : 's'}</div>
-          <div class="cluster-samples">
-            ${c.samples
-              .map((s) => `<img class="favicon" src="${escapeAttr(faviconUrl(s.favicon, s.url))}" onerror="this.style.visibility='hidden'" />`)
-              .join('')}
-          </div>
+        <button class="side-item cluster-item" data-cluster-id="${c.id}">
+          <span class="list-icon" style="${listIconStyle(c.id)}" aria-hidden="true">${escapeHtml(listInitial(c.label))}</span>
+          <span class="side-item-label">${escapeHtml(c.label)}</span>
+          <span class="side-badge">${c.size}</span>
         </button>`
       )
       .join('');
-
-    clusterGrid.querySelectorAll('.cluster-card').forEach((btn) => {
-      btn.addEventListener('click', () => openClusterDrawer(btn.dataset.clusterId, btn.querySelector('.cluster-label').textContent));
-    });
+    // A list can vanish (its last bookmark was deleted); don't leave the
+    // main area pointing at it.
+    if (currentView.type === 'cluster' && !clusters.some((c) => String(c.id) === String(currentView.id))) {
+      showView({ type: 'recent' }).catch(() => {});
+      return;
+    }
+    setActiveNav();
   }
 
   const overlay = document.getElementById('overlay');
@@ -556,17 +722,6 @@
     deleteBtn: document.getElementById('drawer-delete-selected'),
     refetch: () => currentDrawerRefetch && currentDrawerRefetch(),
   });
-
-  async function openClusterDrawer(id, label) {
-    drawerTitle.textContent = label;
-    drawerList.innerHTML = '';
-    clearDrawerActions();
-    overlay.classList.remove('hidden');
-    currentDrawerRefetch = () => openClusterDrawer(id, label);
-    const res = await fetch(`/api/clusters/${id}/bookmarks`);
-    const { bookmarks } = await res.json();
-    renderResults(drawerList, bookmarks);
-  }
 
   document.getElementById('drawer-close').addEventListener('click', () => overlay.classList.add('hidden'));
   overlay.addEventListener('click', (e) => {
@@ -671,7 +826,7 @@
     importError.classList.remove('hidden');
   }
 
-  document.getElementById('view-clusters-btn').addEventListener('click', () => showTab('clusters'));
+  document.getElementById('view-clusters-btn').addEventListener('click', () => showView({ type: 'recent' }));
 
   // ---------- re-embed existing bookmarks with the active provider ----------
   const reembedBtn = document.getElementById('reembed-btn');
@@ -781,6 +936,52 @@
     }
   });
 
+  // ---------- add preview images to bookmarks saved before thumbnails ----------
+  const previewsBtn = document.getElementById('previews-btn');
+  const previewsProgress = document.getElementById('previews-progress');
+  const previewsProgressFill = document.getElementById('previews-progress-fill');
+  const previewsProgressStage = document.getElementById('previews-progress-stage');
+  const previewsResult = document.getElementById('previews-result');
+
+  function finishPreviews(text, isError) {
+    previewsProgress.classList.add('hidden');
+    previewsBtn.disabled = false;
+    previewsResult.textContent = text;
+    previewsResult.classList.toggle('error', !!isError);
+    previewsResult.classList.remove('hidden');
+  }
+
+  previewsBtn.addEventListener('click', async () => {
+    previewsResult.classList.add('hidden');
+    previewsBtn.disabled = true;
+    previewsProgress.classList.remove('hidden');
+    previewsProgressFill.style.width = '4%';
+    previewsProgressStage.textContent = 'Starting…';
+    try {
+      const res = await fetch('/api/thumbnails/backfill', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Could not start that.');
+      pollJob(data.jobId, {
+        onTick: (job) => {
+          const handled = (job.done || 0) + (job.failed || 0);
+          const pct = job.total ? Math.min(99, Math.round((handled / job.total) * 100)) : 8;
+          previewsProgressFill.style.width = `${job.status === 'done' ? 100 : pct}%`;
+          previewsProgressStage.textContent = job.stage || 'Working…';
+        },
+        onDone: (job) => {
+          const bits = [`${job.done} preview image${job.done === 1 ? '' : 's'} added`];
+          if (job.failed) bits.push(`${job.failed} page${job.failed === 1 ? '' : 's'} couldn't be reached (they'll be retried next time)`);
+          finishPreviews(`Done — ${bits.join(', ')}.`, false);
+          loadStats();
+          refreshView();
+        },
+        onError: (msg) => finishPreviews(msg, true),
+      });
+    } catch (err) {
+      finishPreviews(err.message, true);
+    }
+  });
+
   // ---------- utils ----------
   function escapeHtml(str) {
     return String(str || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -797,5 +998,5 @@
     }
   }
 
-  loadStats();
+  loadStats().then(() => showView({ type: 'recent' }));
 })();

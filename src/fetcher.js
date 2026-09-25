@@ -198,6 +198,23 @@ async function fetchPageContent(url) {
       }
     }
 
+    // Preview image for the thumbnail cards: the page's own social-share
+    // image. Kept only if it resolves to an absolute http(s) URL.
+    let image =
+      $('meta[property="og:image:secure_url"]').attr('content') ||
+      $('meta[property="og:image"]').attr('content') ||
+      $('meta[name="twitter:image"]').attr('content') ||
+      $('meta[name="twitter:image:src"]').attr('content') ||
+      null;
+    if (image) {
+      try {
+        const resolved = new URL(image.trim(), finalUrl);
+        image = /^https?:$/.test(resolved.protocol) && resolved.href.length <= 2000 ? resolved.href : null;
+      } catch {
+        image = null;
+      }
+    }
+
     // Prefer a real content container over the whole <body> when the page
     // has one — cuts out sidebars/menus that survive the removals above.
     const contentSelectors = ['#mw-content-text', 'article', 'main', '[role="main"]', '#content'];
@@ -222,6 +239,7 @@ async function fetchPageContent(url) {
       description: description.slice(0, 500),
       text: bodyText,
       favicon,
+      image,
     };
   } catch (err) {
     // Node wraps a lookup-callback error in the request error; unwrap ours.

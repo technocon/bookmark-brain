@@ -24,7 +24,7 @@ const insertBookmarkStmt = db.prepare(`
 
 const markFetchedStmt = db.prepare(`
   UPDATE bookmarks
-  SET status = 'fetched', page_title = ?, page_description = ?, page_text = ?, favicon = COALESCE(?, favicon), embedding = ?
+  SET status = 'fetched', page_title = ?, page_description = ?, page_text = ?, favicon = COALESCE(?, favicon), embedding = ?, image = COALESCE(?, image)
   WHERE id = ?
 `);
 
@@ -123,6 +123,7 @@ async function fetchAndEmbedOne(bookmark) {
       result.text,
       result.favicon,
       vectorToBuffer(vector),
+      result.image || '', // '' = checked and this page has none
       bookmark.id
     );
     return 'done';
@@ -315,6 +316,51 @@ async function runBackfillPipeline(jobId) {
  * API key. Ends with a full recluster so everything lands in one
  * dimensionality group again instead of staying split (see cluster.js).
  */
+/**
+ * Bookmarks saved before thumbnails existed have no preview image. This
+ * re-fetches each page and stores just its share image. A page that has
+ * none is recorded as '' so it isn't retried on every run; a page that
+ * couldn't be reached stays NULL so a later run tries it again.
+ */
+function startThumbnailJob() {
+  const jobId = createJobRow('thumbnails');
+  runThumbnailPipeline(jobId).catch((err) => {
+    updateJob(jobId, { status: 'error', error: err.message });
+  });
+  return jobId;
+}
+
+async function runThumbnailPipeline(jobId) {
+  const targets = db.prepare(`SELECT id, url FROM bookmarks WHERE status = 'fetched' AND image IS NULL`).all();
+  updateJob(jobId, { stage: 'fetching preview images', total: targets.length, done: 0, partial: 0, failed: 0 });
+  if (targets.length === 0) {
+    updateJob(jobId, { status: 'done', stage: 'done' });
+    return;
+  }
+
+  const setImageStmt = db.prepare(`UPDATE bookmarks SET image = ? WHERE id = ?`);
+  let found = 0;
+  let unreachable = 0;
+  await mapWithConcurrency(
+    targets,
+    FETCH_CONCURRENCY,
+    async (bookmark) => {
+      const result = await fetchPageContent(bookmark.url);
+      if (!result.ok) {
+        unreachable++;
+        return;
+      }
+      setImageStmt.run(result.image || '', bookmark.id);
+      if (result.image) found++;
+    },
+    (completed, total) => {
+      updateJob(jobId, { done: found, failed: unreachable, stage: `fetching preview images (${completed}/${total})` });
+    }
+  );
+
+  updateJob(jobId, { status: 'done', stage: 'done', done: found, failed: unreachable, total: targets.length });
+}
+
 function startReembedJob() {
   const jobId = createJobRow('reembed');
   runReembedPipeline(jobId).catch((err) => {
@@ -488,6 +534,7 @@ module.exports = {
   startImportJobFromList,
   startBackfillJob,
   startReembedJob,
+  startThumbnailJob,
   startDuplicateScanJob,
   saveOneBookmark,
   getJob,

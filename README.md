@@ -50,9 +50,13 @@ to add another provider later.
    Brain parses it, fetches each page (concurrency-limited, tolerant of
    dead links/timeouts), embeds the content, and runs k-means clustering
    with auto-generated topic labels.
-3. Use **Search** to find a bookmark by describing it, or **Clusters** to
-   browse the auto-organized topic view. A trash icon on any result deletes
-   it.
+3. The left sidebar lists your auto-generated topics ("lists", with
+   bookmark counts) — click one to see its bookmarks as cards in the main
+   area. **Recently saved** is the default view. Use the search box to find
+   a bookmark by describing it; clearing it returns to where you were. Each
+   card shows the page's preview image (its `og:image`), or a plain tile
+   with the site's icon when it has none. Hover a card for a select box
+   and a trash icon.
 4. Pages that can't be fetched (dead links, logins, bot-blocked sites)
    aren't dropped — they're embedded from their saved title + folder
    instead and tagged **Title only** everywhere they appear, so they stay
@@ -85,6 +89,17 @@ to add another provider later.
    job with a running "N of M" count. Links already in your collection are
    reported rather than duplicated. It uses the same `POST /api/bookmarks`
    and `POST /api/import-json` routes as the extension and the Import tab.
+9. **Light and dark themes**: the picker at the bottom of the sidebar has
+   System (the default, follows your OS), Light and Dark; the choice is
+   remembered in the browser. The list view has a header with the list's
+   coloured icon, name and count, and a card / compact-row layout toggle.
+10. **Preview images** are captured whenever a page is fetched. Bookmarks
+   saved before that existed show a plain tile; the Import tab's **Add
+   preview images** card (it only appears when some are missing) re-visits
+   those pages in a background job and fills them in. A page with no
+   preview image is remembered so it isn't retried; an unreachable one is
+   retried next run. Note the images themselves load straight from each
+   site into your browser (with no referrer sent), the same way favicons do.
 
 ## Architecture
 

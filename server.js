@@ -3,7 +3,7 @@ const express = require('express');
 const multer = require('multer');
 
 const db = require('./src/db');
-const { startImportJob, startImportJobFromList, startBackfillJob, startReembedJob, startDuplicateScanJob, saveOneBookmark, getJob } = require('./src/jobs');
+const { startImportJob, startImportJobFromList, startBackfillJob, startReembedJob, startThumbnailJob, startDuplicateScanJob, saveOneBookmark, getJob } = require('./src/jobs');
 const { search } = require('./src/search');
 const { activeProvider } = require('./src/embeddings');
 const { buildBookmarksHtml } = require('./src/exporter');
@@ -37,6 +37,7 @@ app.get('/api/stats', (req, res) => {
   const fallback = db.prepare(`SELECT COUNT(*) AS n FROM bookmarks WHERE status = 'fallback'`).get().n;
   const failed = db.prepare(`SELECT COUNT(*) AS n FROM bookmarks WHERE status = 'failed'`).get().n;
   const clusters = db.prepare(`SELECT COUNT(*) AS n FROM clusters`).get().n;
+  const missingImages = db.prepare(`SELECT COUNT(*) AS n FROM bookmarks WHERE status = 'fetched' AND image IS NULL`).get().n;
   // Counts only groups that still have 2+ live members -- a plain COUNT(*)
   // over duplicate_groups would keep reporting stale groups forever, since
   // nothing prunes that table except a fresh scan, and deleting a group's
@@ -57,6 +58,7 @@ app.get('/api/stats', (req, res) => {
     indexed: fetched + fallback,
     clusters,
     duplicateGroups,
+    missingImages,
     embeddingMode: activeProvider(),
   });
 });
@@ -182,7 +184,7 @@ app.get('/api/clusters', (req, res) => {
 app.get('/api/clusters/:id/bookmarks', (req, res) => {
   const bookmarks = db
     .prepare(
-      `SELECT id, url, title, page_title, page_description, favicon, folder, status, fetch_error
+      `SELECT id, url, title, page_title, page_description, favicon, image, folder, status, fetch_error
        FROM bookmarks WHERE cluster_id = ? ORDER BY page_title`
     )
     .all(req.params.id)
@@ -192,6 +194,32 @@ app.get('/api/clusters/:id/bookmarks', (req, res) => {
       title: b.page_title || b.title,
       description: b.page_description,
       favicon: b.favicon,
+      image: b.image,
+      folder: b.folder,
+      contentAvailable: b.status !== 'fallback',
+      fetchError: b.status === 'fallback' ? b.fetch_error : null,
+    }));
+  res.json({ bookmarks });
+});
+
+// Newest saves first -- the default view of the app, and where a link
+// pasted into the save bar shows up.
+app.get('/api/bookmarks/recent', (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit) || 60, 1), 200);
+  const bookmarks = db
+    .prepare(
+      `SELECT id, url, title, page_title, page_description, favicon, image, folder, status, fetch_error
+       FROM bookmarks WHERE status IN ('fetched', 'fallback')
+       ORDER BY id DESC LIMIT ?`
+    )
+    .all(limit)
+    .map((b) => ({
+      id: b.id,
+      url: b.url,
+      title: b.page_title || b.title,
+      description: b.page_description,
+      favicon: b.favicon,
+      image: b.image,
       folder: b.folder,
       contentAvailable: b.status !== 'fallback',
       fetchError: b.status === 'fallback' ? b.fetch_error : null,
@@ -219,6 +247,10 @@ app.get('/api/bookmarks/fallback', (req, res) => {
 app.post('/api/backfill', (req, res) => {
   const jobId = startBackfillJob();
   res.json({ jobId });
+});
+
+app.post('/api/thumbnails/backfill', (req, res) => {
+  res.json({ jobId: startThumbnailJob() });
 });
 
 app.post('/api/reembed', (req, res) => {

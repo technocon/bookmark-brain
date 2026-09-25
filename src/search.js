@@ -18,7 +18,7 @@ async function search(query, { limit = 30 } = {}) {
 
   const rows = db
     .prepare(
-      `SELECT id, url, title, folder, page_title, page_description, favicon, embedding, cluster_id, status, fetch_error
+      `SELECT id, url, title, folder, page_title, page_description, favicon, image, embedding, cluster_id, status, fetch_error
        FROM bookmarks WHERE status IN ('fetched', 'fallback') AND embedding IS NOT NULL`
     )
     .all();
@@ -49,6 +49,7 @@ async function search(query, { limit = 30 } = {}) {
       folder: row.folder,
       description: row.page_description,
       favicon: row.favicon,
+      image: row.image,
       clusterId: row.cluster_id,
       contentAvailable: !isFallback,
       fetchError: isFallback ? row.fetch_error : null,

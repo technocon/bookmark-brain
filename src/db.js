@@ -70,6 +70,12 @@ try {
   if (!/duplicate column/i.test(err.message)) throw err;
 }
 
+try {
+  db.exec('ALTER TABLE bookmarks ADD COLUMN image TEXT');
+} catch (err) {
+  if (!/duplicate column/i.test(err.message)) throw err;
+}
+
 // node:sqlite's DatabaseSync has no better-sqlite3-style `.transaction()`
 // helper; add a minimal equivalent so callers can write the same pattern.
 db.transaction = function transaction(fn) {
