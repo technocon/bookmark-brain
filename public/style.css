@@ -487,6 +487,18 @@ a.btn { display: inline-block; text-decoration: none; }
 }
 .sidebar-head { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 18px; }
 .sidebar-close, .sidebar-toggle { display: none; }
+
+/* Full horizontal logo, swapped for the active theme instead of a
+   plain icon + name -- same dark-default / light-override rule as the
+   :root variable blocks above. */
+.sidebar-logo { display: block; height: 28px; width: auto; }
+.sidebar-logo-light { display: none; }
+:root[data-theme="light"] .sidebar-logo-dark { display: none; }
+:root[data-theme="light"] .sidebar-logo-light { display: block; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .sidebar-logo-dark { display: none; }
+  :root:not([data-theme="dark"]) .sidebar-logo-light { display: block; }
+}
 .side-nav { display: flex; flex-direction: column; gap: 2px; }
 .side-heading {
   margin: 22px 10px 8px;

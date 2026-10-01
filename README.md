@@ -127,6 +127,25 @@ to add another provider later.
 
 Data is stored locally in `data/bookmarks.db` (gitignored).
 
+### Brand assets
+
+The logo and icon source files (color and white horizontal lockups, the
+icon-only crop, and the white lockup as an SVG) live outside this repo,
+in `~/Documents/Valitura/Software Products/Bookmark Brain/`. Everything
+under `public/icons/` and `extension/icons/` -- the favicon, the
+sidebar's theme-swapped horizontal logo (`logo-horizontal-color.png` /
+`-white.png`), `brand-mark.png` (the small icon used in the extension
+popup/options), and the extension's own toolbar icons -- is cropped and
+resized from those files, not hand-drawn. The favicon-sized PNGs and
+`apple-touch-icon.png` regenerate from two square master PNGs via
+`generate-favicon.js`; the extension icons regenerate from
+`extension/icons/brain-master.png` via `extension/generate-icons.js`
+(both macOS-only, run by hand, `sips` instead of an image-processing
+dependency). `favicon.ico` itself is the one exception, checked in as a
+static asset since `sips` can't actually write multi-resolution ICO
+files despite listing the format. If the logo changes, re-export from
+the source files above rather than editing anything in `icons/` by hand.
+
 ## Scope
 
 This is the MVP described in the product brief: import, embed, cluster,
