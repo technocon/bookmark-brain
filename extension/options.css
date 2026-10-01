@@ -24,7 +24,7 @@ html, body {
 .wrap { max-width: 560px; margin: 0 auto; padding: 32px 24px 60px; }
 
 .topbar { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
-.brand-mark { font-size: 24px; }
+.brand-mark { width: 24px; height: 24px; display: block; }
 h1 { font-size: 19px; font-weight: 650; margin: 0; }
 
 .card {
