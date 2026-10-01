@@ -97,7 +97,7 @@ html, body {
 }
 
 .brand { display: flex; align-items: center; gap: 10px; }
-.brand-mark { font-size: 22px; }
+.brand-mark { width: 24px; height: 24px; display: block; }
 .brand-name {
   font-family: var(--font-serif);
   font-size: 21px;
