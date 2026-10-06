@@ -166,18 +166,8 @@ app.get('/api/clusters', (req, res) => {
     .all()
     .map((c) => ({ ...c, terms: JSON.parse(c.terms || '[]') }));
 
-  const sampleStmt = db.prepare(
-    `SELECT id, url, title, page_title, favicon FROM bookmarks WHERE cluster_id = ? LIMIT 4`
-  );
-  for (const c of clusters) {
-    c.samples = sampleStmt.all(c.id).map((b) => ({
-      id: b.id,
-      url: b.url,
-      title: b.page_title || b.title,
-      favicon: b.favicon,
-    }));
-  }
-
+  // No per-list sample bookmarks here: the sidebar only shows label and
+  // count, and fetching them cost a query per list.
   res.json({ clusters });
 });
 
